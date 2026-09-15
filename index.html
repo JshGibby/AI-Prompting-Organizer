@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prompt Organizer — AI-Assisted Workspace</title>
+<meta name="description" content="Turn huge messy prompts into a clear, branching, searchable workspace. Offline-capable, no dependencies.">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="brand" title="AI-Assisted Prompt Organizer">
+      <span class="brand-mark" aria-hidden="true">◈</span>
+      <span class="brand-name">Prompt Organizer</span>
+      <span class="snapshot-badge" id="snapshotBadge" hidden>OFFLINE SNAPSHOT</span>
+    </div>
+    <div class="ws-name-wrap">
+      <input id="wsName" class="ws-name" value="Untitled Workspace" maxlength="80" spellcheck="false" aria-label="Workspace name">
+      <span id="saveState" class="save-state" title="Persistence status">●</span>
+    </div>
+    <div class="top-actions">
+      <button class="btn ghost" id="btnUpload" title="Upload a saved workspace (.json / .zip)">⤒ Upload</button>
+      <button class="btn ghost" id="btnSaveJSON" title="Download workspace as JSON">⤓ JSON</button>
+      <button class="btn ghost" id="btnSaveZIP" title="Download workspace as ZIP">⤓ ZIP</button>
+      <button class="btn primary" id="btnSnapshot" title="Download a single-file HTML snapshot that works fully offline">⤓ Offline snapshot</button>
+      <button class="btn ghost" id="btnNewPrompt" title="Paste a new prompt (N)">＋ Prompt</button>
+      <button class="btn icon" id="btnHelp" title="Keyboard shortcuts (?)">?</button>
+      <input type="file" id="fileInput" accept=".json,.zip,application/json,application/zip" hidden>
+    </div>
+  </header>
+
+  <nav id="mainTabs" aria-label="Main tabs">
+    <div class="tab-strip" id="mainStrip" role="tablist"></div>
+  </nav>
+
+  <div id="workbench">
+    <aside id="sideTabs" aria-label="Item tabs">
+      <div class="tab-strip vertical" id="sideStrip" role="tablist"></div>
+    </aside>
+    <main id="content" tabindex="-1">
+      <div id="tabContent"></div>
+    </main>
+    <aside id="pinPanel" hidden aria-label="Pinned tabs">
+      <div class="pin-head"><span>Pinned</span><button class="btn icon sm" id="btnClosePins" title="Close pinned panel">×</button></div>
+      <div id="pinContent"></div>
+    </aside>
+  </div>
+
+  <footer id="statusbar">
+    <span id="statNodes" title="Nodes">— nodes</span>
+    <span class="sep">·</span><span id="statLinks" title="Connections">— links</span>
+    <span class="sep">·</span><span id="statHealth" title="Workspace health">health —</span>
+    <span class="sep">·</span><span id="statSel" title="Selected node">nothing selected</span>
+    <span class="flex-spacer"></span>
+    <span id="statRoute" title="Deep link">—</span>
+    <button class="btn ghost sm" id="btnCopyLink" title="Copy deep link to this view">⧉ link</button>
+  </footer>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toasts" aria-live="polite"></div>
+
+<script src="js/util.js"></script>
+<script src="js/store.js"></script>
+<script src="js/ingest.js"></script>
+<script src="js/analyze.js"></script>
+<script src="js/readme.js"></script>
+<script src="js/recompile.js"></script>
+<script src="js/tests.js"></script>
+<script src="js/snapshot.js"></script>
+<script src="js/graph.js"></script>
+<script src="js/ui-core.js"></script>
+<script src="js/ui-tabs-a.js"></script>
+<script src="js/ui-tabs-b.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
