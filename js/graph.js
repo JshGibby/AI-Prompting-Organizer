@@ -55,28 +55,58 @@
     return { nodes: nodes.slice(0, 260), edges: edges.slice(0, 600) };
   }
 
+  /* ---------- saved node positions (persisted per workspace) ---------- */
+  function loadPositions(W) { return (W.layout && W.layout.positions) || {}; }
+  function savePositions(W, pos) {
+    W.layout = W.layout || { savedAt: '' };
+    W.layout.positions = pos;
+    W.layout.savedAt = U.nowISO();
+    PO.store.touch();
+  }
+
   function layout(W, g, w, h) {
     // layered by tree depth; spread within layer; small force-relax on x.
+    var saved = loadPositions(W);
+    var pos = {};
+    var anySaved = g.nodes.some(function (n) { return saved[n.id]; });
+    if (anySaved) {
+      // restore user arrangement; nudge overlaps apart slightly
+      g.nodes.forEach(function (n) {
+        if (saved[n.id]) pos[n.id] = { x: saved[n.id].x, y: saved[n.id].y, fixed: true };
+      });
+      relaxOverlaps(pos, g, w, h);
+      // free nodes still need a base position
+      basePositions(W, g, pos, w, h);
+      return pos;
+    }
+    basePositions(W, g, pos, w, h);
+    return pos;
+  }
+
+  function basePositions(W, g, pos, w, h) {
     var layers = {};
     g.nodes.forEach(function (n) {
       var d = PO.analyze.depthOf(W, n.id);
       (layers[d] = layers[d] || []).push(n);
     });
     var depths = Object.keys(layers).map(Number).sort(function (a, b) { return a - b; });
-    var pos = {};
     var lh = depths.length > 1 ? (h - 120) / (depths.length - 1) : 0;
     depths.forEach(function (d, li) {
       var arr = layers[d];
       arr.forEach(function (n, i) {
+        if (pos[n.id]) return;
         var x = arr.length > 1 ? 90 + (w - 180) * (i / (arr.length - 1)) : w / 2;
         pos[n.id] = { x: x, y: 60 + li * lh };
       });
     });
-    // relax: pull connected nodes toward each other's x
+    // relax: pull connected nodes toward each other's x (skip fixed)
     for (var it = 0; it < 24; it++) {
       g.edges.forEach(function (e) {
         var a = pos[e.a], b = pos[e.b];
         if (!a || !b) return;
+        if (a.fixed && b.fixed) return;
+        if (a.fixed) { b.x -= (b.x - a.x) * 0.06; return; }
+        if (b.fixed) { a.x += (b.x - a.x) * 0.06; return; }
         var dx = (b.x - a.x) * 0.06;
         a.x += dx; b.x -= dx;
       });
@@ -85,7 +115,34 @@
       pos[k].x = U.clamp(pos[k].x, 80, w - 80);
       pos[k].y = U.clamp(pos[k].y, 40, h - 40);
     });
-    return pos;
+  }
+
+  /* push apart nodes that landed on top of each other (grid jiggle) */
+  function relaxOverlaps(pos, g, w, h) {
+    var CELL = 92;
+    var seen = {};
+    g.nodes.forEach(function (n) {
+      var p = pos[n.id];
+      if (!p) return;
+      var key = Math.round(p.x / CELL) + ',' + Math.round(p.y / CELL);
+      if (seen[key]) {
+        // find nearest free cell spiral
+        for (var r = 1; r <= 4; r++) {
+          var placed = false;
+          for (var dx = -r; dx <= r && !placed; dx++) {
+            for (var dy = -r; dy <= r && !placed; dy++) {
+              var k2 = Math.round((p.x + dx * CELL) / CELL) + ',' + Math.round((p.y + dy * CELL) / CELL);
+              if (!seen[k2]) {
+                p.x = U.clamp(p.x + dx * CELL, 80, w - 80);
+                p.y = U.clamp(p.y + dy * CELL, 40, h - 40);
+                seen[k2] = 1; placed = true;
+              }
+            }
+          }
+          if (placed) break;
+        }
+      } else seen[key] = 1;
+    });
   }
 
   function render(el, W, opts) {
@@ -114,6 +171,7 @@
       ln.setAttribute('x1', a.x); ln.setAttribute('y1', a.y);
       ln.setAttribute('x2', b.x); ln.setAttribute('y2', b.y);
       ln.setAttribute('class', 'gedge');
+      ln.dataset.a = e.a; ln.dataset.b = e.b;
       ln.setAttribute('stroke', REL_COLORS[e.rel] || '#3a4a66');
       if (e.rel !== 'partof') ln.setAttribute('marker-end', 'url(#arr)');
       if (e.rel === 'conflictsWith') ln.setAttribute('stroke-dasharray', '5 3');
@@ -189,31 +247,48 @@
     });
     svg.addEventListener('pointerup', function () { panning = null; });
 
-    // click select + drag-to-reparent
+    // click select + drag-to-move + drag-to-reparent
     var drag = null;
     nodeG.querySelectorAll('.gnode').forEach(function (grp) {
       grp.addEventListener('pointerdown', function (ev) {
         ev.stopPropagation();
-        drag = { id: grp.dataset.nid, x0: ev.clientX, y0: ev.clientY, moved: false, el: grp };
+        drag = { id: grp.dataset.nid, x0: ev.clientX, y0: ev.clientY, moved: false, el: grp, px: pos[grp.dataset.nid].x, py: pos[grp.dataset.nid].y, scale: scale };
         grp.setPointerCapture(ev.pointerId);
       });
       grp.addEventListener('pointermove', function (ev) {
         if (!drag || drag.id !== grp.dataset.nid) return;
-        if (Math.hypot(ev.clientX - drag.x0, ev.clientY - drag.y0) > 6) drag.moved = true;
+        var dx = ev.clientX - drag.x0, dy = ev.clientY - drag.y0;
+        if (Math.hypot(dx, dy) > 6) drag.moved = true;
+        if (drag.moved) {
+          var p = pos[drag.id];
+          p.x = U.clamp(drag.px + dx / drag.scale, 30, w - 30);
+          p.y = U.clamp(drag.py + dy / drag.scale, 20, h - 20);
+          p.fixed = true;
+          grp.setAttribute('transform', 'translate(' + p.x + ',' + p.y + ')');
+          // live-update edges touching this node
+          edgeG.querySelectorAll('[data-a="' + drag.id + '"], [data-b="' + drag.id + '"]').forEach(function (ln) {
+            var a = pos[ln.dataset.a], b = pos[ln.dataset.b];
+            if (!a || !b) return;
+            ln.setAttribute('x1', a.x); ln.setAttribute('y1', a.y);
+            ln.setAttribute('x2', b.x); ln.setAttribute('y2', b.y);
+          });
+        }
       });
       grp.addEventListener('pointerup', function (ev) {
         if (!drag || drag.id !== grp.dataset.nid) return;
         var d = drag; drag = null;
         if (!d.moved) { if (opts.onSelect) opts.onSelect(d.id); return; }
-        // drop target: element under pointer
+        if (opts.onPositions) opts.onPositions(snapshotPositions(pos));
+        // drop target: element under pointer (re-parent)
         grp.releasePointerCapture && grp.releasePointerCapture(ev.pointerId);
         var under = document.elementFromPoint(ev.clientX, ev.clientY);
         var tgt = under && under.closest ? under.closest('.gnode') : null;
         if (tgt && tgt.dataset.nid !== d.id && opts.onReparent) opts.onReparent(d.id, tgt.dataset.nid);
-        else if (opts.onSelect) opts.onSelect(d.id);
       });
     });
-    return { svg: svg, graph: g, reset: function () { scale = 1; tx0 = 0; ty0 = 0; apply(); } };
+    return { svg: svg, graph: g, pos: pos,
+      reset: function () { scale = 1; tx0 = 0; ty0 = 0; apply(); },
+      clearArrangement: function () { savePositions(W, {}); } };
   }
 
   /* ---------- mind map (radial around a root) ---------- */
@@ -285,9 +360,15 @@
     }).join('') + '</div>';
   }
 
+  function snapshotPositions(pos) {
+    var out = {};
+    Object.keys(pos).forEach(function (k) { out[k] = { x: Math.round(pos[k].x), y: Math.round(pos[k].y) }; });
+    return out;
+  }
+
   PO.graph = {
     TYPE_COLORS: TYPE_COLORS, REL_COLORS: REL_COLORS,
     render: render, renderMindmap: renderMindmap, renderTimeline: renderTimeline,
-    filteredGraph: filteredGraph
+    filteredGraph: filteredGraph, loadPositions: loadPositions, savePositions: savePositions
   };
 })();

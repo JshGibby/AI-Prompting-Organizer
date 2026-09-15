@@ -17,7 +17,7 @@ function load(f) {
   const code = fs.readFileSync(path.join(__dirname, 'js', f), 'utf8');
   eval.call(global, code + '\n//# sourceURL=' + f);
 }
-['util.js', 'store.js', 'ingest.js', 'analyze.js', 'readme.js', 'recompile.js', 'tests.js', 'snapshot.js'].forEach(load);
+['util.js', 'store.js', 'ingest.js', 'analyze.js', 'readme.js', 'recompile.js', 'tests.js', 'ai.js', 'snapshot.js'].forEach(load);
 
 const U = PO.util;
 let fails = 0;
@@ -158,6 +158,78 @@ const s1 = PO.tests.scoreOutput(tc, 'you can dodge with timing', 0);
 ok(s1.pass && s1.score === 100, 'contains-rule scoring passes');
 const best = PO.tests.bestVersion(W, res.prompt.id);
 ok(best && best.version === 2, 'best version tracked: v' + (best && best.version));
+
+// ---- AI chat engine (context + patch pipeline) ----
+const ctx = PO.ai.buildContext(W, 'how does combat work', {});
+ok(ctx.indexOf('WORKSPACE: Test WS') >= 0, 'context names the workspace');
+ok(ctx.indexOf('rule.') >= 0, 'context lists relevant node ids');
+PO.ui = undefined; // ai.js must not depend on the UI layer
+const sp = PO.ai.systemPrompt(W, {});
+ok(sp.indexOf('po-patch') >= 0, 'system prompt documents the patch format');
+ok(typeof PO.ui === 'undefined', 'ai.js loaded without a UI layer');
+
+const goodPatch = { ops: [
+  { op: 'update', id: 'rule.' + (Object.keys(W.nodes).find(id => id.startsWith('rule.')) || 'x').split('.')[1], text: 'Players must always keep every item after death, including on disconnect.' },
+  { op: 'create', type: 'rule', title: 'Session timeout', text: 'Sessions must expire after 30 minutes of inactivity.' },
+  { op: 'link', a: 'placeholder-a', b: 'placeholder-b', rel: 'implements' }
+]};
+// fix ids against the real workspace
+const anyRuleId = Object.keys(W.nodes).find(id => id.startsWith('rule.'));
+goodPatch.ops[0].id = anyRuleId;
+const featId = Object.keys(W.nodes).find(id => id.startsWith('feature.')) || anyRuleId;
+goodPatch.ops[2].a = anyRuleId; goodPatch.ops[2].b = featId;
+PO.ai.setWorkspaceForValidation(W);
+const vres = PO.ai.validatePatch(goodPatch);
+ok(vres.ok, 'valid patch passes: ' + (vres.ok ? '' : vres.errors.join('; ')));
+const badPatch = { ops: [
+  { op: 'update', id: 'nope.missing', text: 'x' },
+  { op: 'delete', id: 'folder.root' },
+  { op: 'link', a: 'same.id', b: 'same.id', rel: 'notARel' },
+  { op: 'create', type: 'bogus', title: '', text: '' }
+]};
+const vbad = PO.ai.validatePatch(badPatch);
+ok(!vbad.ok && vbad.errors.length >= 4, 'invalid patch rejected with errors (' + vbad.errors.length + ')');
+ok(PO.ai.validatePatch({ ops: [] }).ok === false, 'empty ops rejected');
+const extracted = PO.ai.extractPatch('Plan here.\n```po-patch\n' + JSON.stringify(goodPatch) + '\n```');
+ok(extracted && extracted.ops.length === 3, 'patch extracted from fenced block');
+ok(PO.ai.extractPatch('no patch here') === null, 'missing patch returns null');
+
+const nodesBefore = Object.keys(W.nodes).length;
+const versionsBefore = W.versions.length;
+const applied = PO.ai.applyPatch(goodPatch, 'test');
+ok(applied.applied.length === 3, 'all three ops applied');
+ok(applied.skipped.length === 0, 'no ops skipped');
+ok(Object.keys(W.nodes).length === nodesBefore + 1, 'create added exactly one node');
+ok(W.versions.length === versionsBefore + 2, 'update+create each added a version entry');
+ok(W.changelog.some(c => c.action === 'ai-edit'), 'changelog recorded ai-edit');
+ok(W.changelog.some(c => c.action === 'ai-add'), 'changelog recorded ai-add');
+const createdId = applied.applied.find(a => a.op === 'create').id;
+ok(W.nodes[createdId] && W.nodes[createdId].parent === 'folder.rules', 'created rule landed in folder.rules: ' + createdId);
+ok(W.edges.some(e => e.a === createdId && e.rel === 'partof'), 'created node got a partof edge');
+ok(W.nodes[anyRuleId].text.indexOf('including on disconnect') >= 0, 'update applied verbatim');
+ok(W.nodes[anyRuleId].ver >= 2, 'update bumped node version (now v' + W.nodes[anyRuleId].ver + ')');
+// duplicate link is skipped
+const dupApply = PO.ai.applyPatch(goodPatch, 'test2');
+ok(dupApply.skipped.some(s => s.why === 'link already exists'), 'duplicate link skipped on re-apply');
+ok(PO.ai.summarizeChanges(applied).length > 0, 'changes summarized: ' + PO.ai.summarizeChanges(applied));
+PO.ai.setWorkspaceForValidation(null);
+
+// ---- provider catalog, quotas & usage tracker ----
+const P = PO.ai.presets();
+ok(Object.keys(P).length >= 8, 'provider catalog has ' + Object.keys(P).length + ' providers');
+ok(PO.ai.isLocal('ollama') && PO.ai.isLocal('lmstudio'), 'local providers flagged');
+ok(!PO.ai.isLocal('groq'), 'cloud provider not local');
+ok(PO.ai.contextLimit({ model: 'llama-3.3-70b-versatile' }) === 128000, 'free-model ctx limit known');
+ok(PO.ai.contextLimit({ model: 'gemini-2.0-flash' }) === 1000000, 'gemini 1M ctx limit');
+ok(PO.ai.contextLimit({ model: 'totally-unknown-model' }) === 128000, 'fallback ctx limit');
+ok(!!PO.ai.modelInfo('llama-3.1-8b-instant'), 'quota info present for free model');
+ok(!!PO.ai.modelInfo('llama-3.1-8b-instant').quota, 'quota text present');
+PO.ai.recordUsage({ provider: 'groq', model: 'llama-3.3-70b-versatile', inTok: 100, outTok: 50, ms: 1200 });
+PO.ai.recordUsage({ provider: 'groq', model: 'llama-3.3-70b-versatile', inTok: 200, outTok: 80, ms: 900 });
+const us = PO.ai.usageSummary();
+ok(us.todayMsgs === 2, 'usage tracker counts messages');
+ok(us.todayTok === 430, 'usage tracker sums tokens (' + us.todayTok + ')');
+ok(us.today.byModel['llama-3.3-70b-versatile'].msgs === 2, 'usage tracked per model');
 
 // persist round-trip via localStorage fallback
 PO.store.persist().then(() => {

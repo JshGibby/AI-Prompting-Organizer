@@ -43,14 +43,43 @@
     return new Blob([out], { type: 'application/zip' });
   }
 
+  function slugFile(s) { return U.slug(s || 'item', 40) || 'item'; }
+
   function workspaceFileSet(W) {
     var files = [];
     files.push({ name: 'workspace.json', data: JSON.stringify({ app: 'prompt-organizer', schema: 1, exportedAt: U.nowISO(), workspace: W }, null, 1) });
     files.push({ name: 'README.md', data: PO.readme.rootReadme(W) });
+    // per-folder readmes mirror the branching file system
     Object.keys(W.nodes).forEach(function (id) {
       var n = W.nodes[id];
       if (n.type === 'folder') files.push({ name: 'readmes/' + id + '.md', data: (W.readmes[id] || {}).md || PO.readme.folderReadme(W, id) });
     });
+    // typed folders: scripts/, documents/, assets/, prompts/, requirements/
+    function folderNodes(folderId) {
+      return PO.analyze.nodesArr(W).filter(function (n) { return n.parent === folderId; });
+    }
+    folderNodes('folder.scripts').forEach(function (n) {
+      files.push({ name: 'scripts/' + slugFile(n.title) + '--' + U.slug(n.id, 40) + '.md',
+        data: '# ' + (n.title || n.id) + '\n\n' + (n.text || '') + '\n\n---\n\n- id: `' + n.id + '`\n- parent: `' + (n.parent || '') + '`\n- updated: ' + n.updated + '\n' });
+    });
+    folderNodes('folder.documents').forEach(function (n) {
+      files.push({ name: 'documents/' + slugFile(n.title) + '--' + U.slug(n.id, 40) + '.md',
+        data: '# ' + (n.title || n.id) + '\n\n' + (n.text || '') + '\n\n---\n\n- id: `' + n.id + '`\n- parent: `' + (n.parent || '') + '`\n- updated: ' + n.updated + '\n' });
+    });
+    folderNodes('folder.prompts').forEach(function (n) {
+      files.push({ name: 'prompts/' + slugFile(n.title) + '--' + U.slug(n.id, 40) + '.md',
+        data: '# ' + (n.title || n.id) + '\n\n' + (n.text || '') + '\n\n---\n\n- id: `' + n.id + '`\n- updated: ' + n.updated + '\n' });
+    });
+    folderNodes('folder.requirements').forEach(function (n) {
+      files.push({ name: 'requirements/' + slugFile(n.title) + '--' + U.slug(n.id, 40) + '.md',
+        data: '# ' + (n.title || n.id) + '\n\n> ' + (n.text || '') + '\n\n---\n\n- id: `' + n.id + '`\n- updated: ' + n.updated + '\n' });
+    });
+    var assets = folderNodes('folder.assets');
+    if (assets.length) {
+      files.push({ name: 'assets/README.md',
+        data: '# Assets\n\nEmbedded asset data is in workspace.json. Items:\n\n' +
+          assets.map(function (a) { return '- ' + (a.title || a.id) + ' (`' + a.id + '`)'; }).join('\n') + '\n' });
+    }
     files.push({ name: 'graph.json', data: JSON.stringify({ nodes: W.nodes, edges: W.edges }, null, 1) });
     files.push({ name: 'changelog.md', data: '# Changelog\n\n' + W.changelog.map(function (c) { return '- ' + c.at + ' · ' + c.action + ' — ' + c.detail; }).join('\n') });
     files.push({ name: 'manifest.json', data: JSON.stringify(manifest(W), null, 1) });
@@ -176,7 +205,7 @@
   }
 
   /* ---------- single-file HTML snapshot ---------- */
-  var JS_FILES = ['util.js', 'store.js', 'ingest.js', 'analyze.js', 'readme.js', 'recompile.js', 'tests.js', 'snapshot.js', 'graph.js', 'ui-core.js', 'ui-tabs-a.js', 'ui-tabs-b.js', 'app.js'];
+  var JS_FILES = ['util.js', 'store.js', 'ingest.js', 'analyze.js', 'readme.js', 'recompile.js', 'tests.js', 'snapshot.js', 'graph.js', 'ai.js', 'prefs.js', 'suggest.js', 'ui-core.js', 'ui-chat.js', 'ui-tabs-a.js', 'ui-tabs-b.js', 'ui-extra-tabs.js', 'app.js'];
   function buildSnapshotHTML(W) {
     function fetchText(url) {
       return fetch(url, { cache: 'no-store' }).then(function (r) {
