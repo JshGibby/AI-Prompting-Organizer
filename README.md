@@ -68,7 +68,7 @@ node test-engine.js   # 30+ assertions over ingest → recompile → eval → me
 
 ```
 index.html          shell: top bar, tab bars, workbench, status bar, modal/toast roots
-css/styles.css      full theme (dark), all components
+css/styles.css      full theme (dark) + pro features (45 upgrades) + branch AI editor styles
 js/util.js          text stats, similarity (shingle Jaccard + overlap), LCS diff,
                     token heuristic, CRC32, downloads
 js/store.js         workspace model, IndexedDB + localStorage persistence (per-user),
@@ -82,17 +82,25 @@ js/recompile.js     subtree collection, dependency pull-in, budget fit with
                     hard-constraint protection, no-loss proof
 js/tests.js         test cases, scoring rules, deterministic mock model, runs,
                     run comparison, best-version tracking
-js/ai.js            AI chat engine: BYO-key provider settings (localStorage),
+js/ai.js            AI chat engine: BYO-key provider settings (localStorage, no free-model table),
                     OpenAI-compatible streaming client, workspace context builder,
                     po-patch validation + applier with full audit trail
+js/branch-ai.js     ✨ Core requested: tree branch AI editor — aggregated full text view,
+                    prompt box, 4k/8k/16k/32k/64k token selector with explanations,
+                    project summary context, detailed paragraph output, updates every
+                    affected node in folder, right-click context menu
+js/pro-features.js  🚀 45 pro features: command palette, focus mode, split view,
+                    multi-select & bulk bar, folder colors, quick rename, fav bar,
+                    recent drawer, charts, heatmap, mini-map, template gallery,
+                    export/import, restore points, theme builder, lint auto-fix, etc.
 js/ui-chat.js       💬 AI Chat side tab: streaming bubbles, patch review cards,
-                    quick actions, provider settings modal, floating launcher
+                    quick actions, provider configuration modal (no free-model refs)
 js/snapshot.js      JSON/ZIP/single-file-HTML export, upload (json/zip/html),
                     merge-or-replace, minimal ZIP reader/writer (stored entries)
 js/graph.js         layered SVG layout, pan/zoom, drag-to-reparent, mind map, timeline
 js/ui-core.js       tab viewer, hash router, selection sync, tree, modals, toasts
 js/ui-tabs-a.js     Prompts, Review, Dashboard, Search, Versions, Traceability, Recompile
-js/ui-tabs-b.js     Tree, Graph, Node, Source, READMEs, Scripts, Documents, Assets
+js/ui-tabs-b.js     Tree (with pro toolbar: palette/focus/fav/recent + ✨ hover AI button), Graph, Node (pro tools), Source, READMEs, Scripts, Documents, Assets
 js/app.js           boot, seeding, sample data, snapshot-mode behavior
 test-engine.js      headless pipeline tests (node, no browser required)
 ```
@@ -121,19 +129,19 @@ workspace. Two modes:
   changelog and version ledger exactly like a human edit (update / create / link /
   delete; dependents are marked stale).
 
-**API-style settings (⚙ AI settings)** — per-user, bring-your-own-key:
+**API-style settings (⚙ AI Configuration)** — per-user, bring-your-own-key:
 
 | Field | Notes |
 |---|---|
 | Provider | OpenAI, OpenRouter, Groq, Cerebras, Google Gemini, Mistral, Together, **LM Studio (local)**, **Ollama (local)** |
 | API base URL | Any OpenAI-compatible `/v1` endpoint works |
-| Model | Free text with per-provider suggestions |
+| Model | Free text with per-provider suggestions + context window display |
 | API key | Stored only in your browser's localStorage; sent only to your provider |
 | Extra system instructions | Optional house rules for tone/format |
 
-"Test connection" verifies the key before you save. The settings panel also shows a
-**free-model table** — context window and free-tier limits (requests/min, daily caps)
-per model — and local providers (Ollama / LM Studio) always work with no cloud at all.
+"Test connection" verifies the key before you save. The settings panel shows model details
+(context window) and provider notes. Local providers (Ollama / LM Studio) work fully offline
+with no cloud at all.
 
 A **ctx meter** under the chat shows tokens used vs your model's context window (with a
 ✂ trim button), the **📊 button** shows local AI-efficiency stats (messages, tokens, avg
@@ -159,22 +167,83 @@ to your workspace ("Explain 3 coverage gaps", "Resolve 2 conflicts"…).
 Assets, incl. AI Chat) · `G`/`T`/`D` Guide/Tree/Dashboard · `/` search · `N` new prompt ·
 `[`/`]` prev/next node · `?` help · `Esc` close dialog
 
-## New in this build
+## New in this build — Pro Upgrade (45 features)
 
-- **📖 Guide tab** — a friendly tutorial for every tab plus a **60-second tour** that walks
-  your real workspace (Ctrl+9).
-- **⚠ Issues tab** — every app error in one console (with copy-all) plus **automatic
-  workspace checks**: broken links, parentless nodes, coverage gaps, duplicates. Ctrl+8.
-- **🎨 ⚙ Preferences** — six themes (Midnight, Ocean, Forest, Sunset, Candy, Paper),
-  text-size slider, Comfy/Compact spacing, Calm animations, and confetti you can turn off.
-- **💡 Rotating tips** — 30 premade suggestions, 6 shown at a time, auto-rotate every
-  2 minutes with pause/shuffle.
-- **🕸 Movable graph** — drag nodes anywhere (positions save with the workspace),
-  ✨ Auto-arrange snaps to a tidy anti-overlap grid, and overlaps can't happen at all.
-- **🗂 Folder-organized ZIP** — exports now include `scripts/`, `documents/`,
-  `prompts/`, `requirements/`, `assets/` folders alongside the per-folder READMEs.
-- **📊 Synced statistics** — Dashboard, Review Queue badge, and status bar share one
-  computed-per-render stats pass, so numbers always agree.
+**✨ AI Branch Editor — the headline:**
+- Click any tree node or entire folder branch → popup shows *all* descendant text verbatim, aggregated.
+- Text box for your prompt instruction (“make it more detailed in paragraphs, add examples, fix grammar…”)
+- **Output Tokens selector:** 4000, 8000, 16000, 32000, 64000 — each explains size, purpose, speed/cost effect.
+- Submit → AI reads branch content + project overall summary (README + stats + health) and rewrites in detailed paragraphs with good grammar.
+- Apply updates every affected item inside the folder — each node gets its own version entry, fully viewable via Node view or right-click → View Full Text.
+- Right-click context menu on any tree row: View Full Text (entire branch), AI Enhance, Copy, Duplicate, Favorite, Recompile, Folder Color.
+
+**45 Pro Features — organized:**
+
+**A: Tree & Navigation Pro (10)**
+1. Command Palette (Ctrl+K) — searchable actions + node jump
+2. Focus Mode (F) — hide chrome, focus only on current branch
+3. Split View (S) — compare two nodes side-by-side with copy
+4. Multi-Select (Ctrl+Click, Shift+Click) + bulk toolbar (tag/move/export/AI)
+5. Folder Color & Icon Customization (blue/green/amber/pink/red)
+6. Quick Rename (double-click or context menu) with version ledger
+7. Back/Forward breadcrumb history
+8. Favorite Bar — horizontal quick-access, draggable, toggleable
+9. Recent Edits Timeline drawer (R) — last 30 changes with jump
+10. Auto-Expand folders on drag-over
+
+**B: Editing & AI Pro (10)**
+11. Branch AI Editor with token selector & project summary context
+12. Full Text Aggregated Viewer — scrollable, copy, download
+13. Token Size Selector (4k/8k/16k/32k/64k) with usage guidance
+14. Right-Click Context Menu for every tree item
+15. Inline Tag Editor — chips with add/remove + suggestions
+16. Node Duplication with deep copy & audit log
+17. Bulk Tag Operations for multi-select
+18. Auto-Tag Suggestions (heuristic + AI button)
+19. Variable Interpolation Live Preview (`{{var}}` → pill)
+20. Snippet Insertion Palette with search
+
+**C: Search & Intelligence Pro (8)**
+21. Fuzzy Search with typo tolerance
+22. Saved Search Folders grouped by prefix
+23. Glossary Auto-Linking — terms become dashed links with hover definition
+24. Acronym Expansion on hover (from Acronyms doc)
+25. Search Inside Node (line-level hits)
+26. Semantic Link Suggestions (similarity >35%)
+27. Coverage Heatmap — topics colored by % covered
+28. Negative Space Auto-Fix proposals with one-click idea creation
+
+**D: Visualization & Analytics Pro (7)**
+29. Statistics Charts (canvas, no libs) — type & status bar charts
+30. Graph Mini-Map — folder structure quick nav
+31. Mind Map Export as SVG
+32. Timeline Filter by kind & export
+33. Token Budget Live Calculator with % of context window
+34. Health Checklist — actionable sentences + Fix buttons
+35. Dependency Impact Graph — who depends on this node
+
+**E: Collaboration & Quality Pro (10)**
+36. Template Gallery with categories (Feature/Mechanic/Bug/Other) + preview
+37. Export Branch as Markdown/JSON/ZIP
+38. Import Markdown Folder Structure — headings become topics/features/rules
+39. Snapshot Comparison — added/removed/changed diff
+40. Auto-Save Restore Points (10 slots, localStorage)
+41. Keyboard Shortcut Customizer UI + cheat sheet
+42. Theme Builder — custom accent & background colors, persisted
+43. Lint Auto-Fix — fixes TBD/thing/etc/extra spaces
+44. Node Version Diff Inline — per-node history with line diffs
+45. Workspace Executive Summary — AI-aware overview with recommendations
+
+All features are vanilla HTML/CSS/JS, no dependencies, fully offline except AI calls.
+
+**Previous build highlights:**
+- **📖 Guide tab** — tutorial + 60-second tour (Ctrl+9).
+- **⚠ Issues tab** — error console + automatic workspace checks (Ctrl+8).
+- **🎨 ⚙ Preferences** — six themes, text size, spacing, animations, confetti.
+- **💡 Rotating tips** — 30 suggestions, 6 at a time, auto-rotate 2 min.
+- **🕸 Movable graph** — drag nodes, positions persist, auto-arrange grid.
+- **🗂 Folder-organized ZIP** — scripts/documents/prompts/requirements/assets folders.
+- **📊 Synced statistics** — Dashboard, Review badge, status bar share one stats pass.
 
 ## File formats
 

@@ -435,8 +435,9 @@
       var sel = state.nodeId === id ? ' sel' : '';
       var dim = (!passesFilters(n) && opts.dimFiltered === false) ? '' : '';
       var hide = opts.applyFilters && !passesFilters(n) && !kids.some(function (k) { return passesFilters(k); }) ? ' style="display:none"' : '';
+      var colAttr = (n.meta && n.meta.color) ? ' data-color="' + U.esc(n.meta.color) + '"' : '';
       var s = '<div class="tnode"' + hide + '>' +
-        '<div class="trow' + sel + '" data-nid="' + U.esc(id) + '" draggable="' + (opts.draggable === false ? 'false' : 'true') + '">' +
+        '<div class="trow' + sel + '" data-nid="' + U.esc(id) + '" draggable="' + (opts.draggable === false ? 'false' : 'true') + '"' + colAttr + '>' +
         '<span class="st-bar st-' + n.status + '-b"></span>' +
         '<span class="caret" data-caret="' + U.esc(id) + '">' + (kids.length ? (collapsed ? '▶' : '▼') : '') + '</span>' +
         '<span class="ico">' + typeIcon(n.type) + '</span>' +
