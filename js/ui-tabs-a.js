@@ -225,11 +225,28 @@
     host.innerHTML = ui.tabHeadHTML(W, 'Review Queue', 'Sorted by severity × impact — spend attention where it matters most. Every action is logged.') +
       '<div class="chips" style="margin-bottom:10px">' + chips.map(function (c) {
         return '<button class="subtab" data-rf="' + c[0] + '" aria-selected="' + (f === c[0]) + '">' + c[1] + (counts[c[0]] ? ' (' + counts[c[0]] + ')' : '') + '</button>';
-      }).join('') + '</div><div id="rList">' +
+      }).join('') +
+      (f && list.length ? '<button class="btn sm ok" id="rAcceptAll" style="margin-left:auto" title="Assert every item in the current filter">✓ Accept all ' + list.length + ' shown</button>' : '') +
+      '</div><div id="rList">' +
       (list.length ? list.slice(0, 120).map(function (it, i) { return reviewItemHTML(W, it, i); }).join('') :
         '<div class="empty">✨ Queue is clear. Nothing needs review.</div>') + '</div>';
     ui.wireTabHead(host);
     host.querySelectorAll('[data-rf]').forEach(function (b) { b.onclick = function () { ui.state.reviewFilter = b.dataset.rf; ui.render(); }; });
+    var aa = host.querySelector('#rAcceptAll');
+    if (aa) aa.onclick = function () {
+      var n = 0;
+      list.forEach(function (it) {
+        var x = it.node;
+        if (x.status === 'uncertain' || x.status === 'inferred') { x.status = 'asserted'; x.conf = Math.max(x.conf || 0, 0.8); n++; }
+        if (x.stale && x.stale.flag) { x.stale = { flag: false, reason: '' }; n++; }
+      });
+      if (n) {
+        PO.store.log('review-accept', 'Bulk accepted ' + n + ' filtered item(s).', null);
+        PO.store.touch(); PO.store.persist();
+      }
+      ui.render();
+      ui.toast('Accepted ' + n + ' item(s).', n ? 'ok' : 'warn');
+    };
     wireReviewActions(W, host, ui, list);
   };
   function reviewItemHTML(W, it, i) {
@@ -264,10 +281,16 @@
           if (act === 'open') { ui.select(n.id, 'review'); ui.setTab('node'); }
           else if (act === 'edit') ui.openNodeEditModal(n.id);
           else if (act === 'why') {
+            var parent = n.parent && W.nodes[n.parent] ? W.nodes[n.parent] : null;
+            var sibs = parent ? PO.analyze.childrenOf(W, parent.id).filter(function (s) { return s.id !== n.id; }).slice(0, 6) : [];
+            var dupQ = it.pair ? '<dt>Possible duplicate</dt><dd><a href="#/node/' + U.esc(it.pair.id) + '">' + U.esc(it.pair.title) + '</a> <span class="mono tiny">' + U.esc(it.pair.id) + '</span></dd>' : '';
             ui.modal('<h2>Why is “' + U.esc(n.title) + '” here?</h2>',
               '<dl class="kv"><dt>Status</dt><dd>' + PO.ui.statusPill(n) + '</dd>' +
               '<dt>Reasoning</dt><dd>' + U.esc(n.why || '—') + '</dd>' +
               '<dt>Confidence</dt><dd>' + Math.round((n.conf || 0) * 100) + '%</dd>' +
+              '<dt>Placed in</dt><dd>' + (parent ? U.esc(parent.title) + ' <span class="mono tiny">' + U.esc(parent.id) + '</span>' : '—') + '</dd>' +
+              (sibs.length ? '<dt>Neighbor items</dt><dd>' + sibs.map(function (s) { return '<a href="#/node/' + U.esc(s.id) + '">' + U.esc(s.title) + '</a>'; }).join(' · ') + '</dd>' : '') +
+              dupQ +
               '<dt>Source quote</dt><dd><div class="quoteblock">' + U.esc(n.quote || '(none)') + '</div></dd>' +
               '<dt>Anchor</dt><dd class="mono small">' + (n.anchor ? U.esc(n.anchor.promptId + ' v' + n.anchor.ver + ' [' + n.anchor.start + '–' + n.anchor.end + ']') : '—') + '</dd></dl>');
           }
@@ -332,14 +355,19 @@
   PO.uiTabs.dashboard = function (W, host, ui) {
     var A = PO.analyze, st = A.stats(W), h = A.health(W), cov = A.coverage(W);
     var typeCells = Object.keys(st.byType).map(function (t) {
-      return '<div class="stat"><div class="v">' + st.byType[t] + '</div><div class="l">' + ui.typeIcon(t) + ' ' + t + 's</div></div>';
+      return '<div class="stat clickable" data-tf="' + t + '" title="Show all ' + t + 's in the Tree"><div class="v">' + st.byType[t] + '</div><div class="l">' + ui.typeIcon(t) + ' ' + t + 's →</div></div>';
     }).join('');
+    var ai = null;
+    try { ai = PO.ai.usageSummary(); } catch (e) { ai = null; }
     host.innerHTML = ui.tabHeadHTML(W, 'Dashboard', 'The prompt at a glance — and where more work is needed.') +
       '<div class="grid c4">' +
       '<div class="stat"><div class="v">' + U.fmtNum(st.words) + '</div><div class="l">words · ' + U.fmtNum(st.chars) + ' chars</div></div>' +
       '<div class="stat"><div class="v">~' + U.fmtNum(st.tokens) + '</div><div class="l">tokens · ' + st.readingMin + ' min read</div></div>' +
       '<div class="stat"><div class="v">' + st.nodes + '</div><div class="l">items · depth ' + st.maxDepth + '</div></div>' +
       '<div class="stat"><div class="v">' + st.edges + '</div><div class="l">connections</div></div>' +
+      '</div><p></p><div class="grid c4">' +
+      attCell(ui, 'uncertain', st.uncertain, 'uncertain') + attCell(ui, 'orphan', st.orphans, 'orphaned') +
+      attCell(ui, 'stale', st.stale, 'stale') + attCell(ui, 'conflict', st.conflicts, 'conflicts') +
       '</div><p></p><div class="grid c4">' + typeCells + '</div>' +
       '<div class="two-col"><div>' +
       '<div class="card"><h3>Workspace health</h3><div class="health-ring"><div class="health-num ' +
@@ -356,15 +384,19 @@
           '<span class="tiny dim">' + c.cov + '% · ' + c.reqs + ' reqs</span></div>';
       }).join('') || '<p class="muted small">No topics yet.</p>') +
       '<p class="small muted">Overall requirement coverage: <strong>' + cov.pct + '%</strong> (' + cov.covered + '/' + cov.total + ')</p></div>' +
-      '</div><div>' +
-      '<div class="card"><h3>Attention</h3><div class="grid c2">' +
-      attCell(ui, 'uncertain', st.uncertain, 'uncertain') + attCell(ui, 'orphan', st.orphans, 'orphaned') +
-      attCell(ui, 'stale', st.stale, 'stale') + attCell(ui, 'conflict', st.conflicts, 'conflicts') +
-      '</div><p class="small muted">Duplicates merged: ' + st.merged + ' · Avg confidence: ' + Math.round(st.avgConf * 100) + '% · Versions: ' + st.versions +
+      '<div><div class="card"><h3>Workspace meta</h3>' +
+      '<p class="small muted">Duplicates merged: ' + st.merged + ' · Avg confidence: ' + Math.round(st.avgConf * 100) + '% · Versions: ' + st.versions +
       '<br>Export size: ~' + U.fmtNum(st.exportBytes) + ' chars JSON</p></div>' +
       '<div class="card"><h3>Recent changes</h3>' + W.changelog.slice(0, 8).map(function (c) {
         return '<div class="small" style="padding:3px 0"><span class="dim">' + U.fmtAgo(c.at) + '</span> <strong>' + U.esc(c.action) + '</strong> — ' + U.esc((c.detail || '').slice(0, 120)) + '</div>';
       }).join('') + '<button class="btn sm ghost" data-goto data-tab="versions">full history →</button></div>' +
+      '<div class="card"><h3>🤖 AI efficiency</h3>' +
+      (ai ? '<div class="row" style="gap:14px"><div><div class="stat" style="border:none;background:transparent;padding:2px"><div class="v">' + ai.todayMsgs + '</div><div class="l">messages today</div></div></div>' +
+        '<div><div class="stat" style="border:none;background:transparent;padding:2px"><div class="v">~' + U.fmtNum(ai.todayTok) + '</div><div class="l">tokens today</div></div></div>' +
+        '<div><div class="stat" style="border:none;background:transparent;padding:2px"><div class="v">' + ai.weekMsgs + '</div><div class="l">this week</div></div></div></div>' +
+        '<p class="tiny muted">Counted locally in this browser. Free-tier quotas per model live in the chat\'s ⚙ AI settings.</p>' :
+        '<p class="small muted">No AI usage tracked yet — open 💬 AI Chat to start. Everything else works offline.</p>') +
+      '<div class="row"><button class="btn sm primary" data-goto data-tab="chat">💬 Ask the AI</button></div></div>' +
       '<div class="card"><h3>Quick actions</h3><div class="row"><button class="btn sm primary" id="dNew">＋ Prompt</button>' +
       '<button class="btn sm" data-goto data-tab="recompile">🧩 Recompile</button>' +
       '<button class="btn sm" data-goto data-tab="review">🛎 Review</button>' +
@@ -373,6 +405,9 @@
     ui.wireTabHead(host);
     host.querySelectorAll('[data-hf]').forEach(function (b) {
       b.onclick = function () { ui.state.reviewFilter = b.dataset.hf === 'reqs' ? '' : b.dataset.hf; ui.setTab(b.dataset.hf === 'reqs' ? 'trace' : 'review'); };
+    });
+    host.querySelectorAll('[data-tf]').forEach(function (b) {
+      b.onclick = function () { ui.state.filters.type = b.dataset.tf; ui.setTab('tree'); };
     });
     host.querySelectorAll('[data-att]').forEach(function (b) {
       b.onclick = function () { ui.state.reviewFilter = b.dataset.att; ui.setTab('review'); };
@@ -407,6 +442,8 @@
         '<button class="btn sm" id="fSaveQ">⭐ save</button>'
     }) + '<div id="sRes"></div>';
     ui.wireFilterBar(host, function () { draw(); });
+    var fBar = host.querySelector('.card .toolbar');
+    if (fBar) fBar.title = 'Filters carry across tabs — press clear to reset all.';
     host.querySelector('#fConf').onchange = function (e) { f.confMin = +e.target.value; draw(); };
     host.querySelector('#fSrc').onchange = function (e) { f.source = e.target.value; draw(); };
     host.querySelector('#fSaveQ').onclick = function () {
@@ -419,7 +456,15 @@
       var res = PO.analyze.expandWithNeighbors(W, PO.analyze.searchNodes(W, f.q, f));
       var box = host.querySelector('#sRes');
       var sel = ui.state.nodeId && W.nodes[ui.state.nodeId];
-      box.innerHTML = '<div class="two-col"><div><div class="card"><h3>' + res.length + ' result(s)' + (f.q ? ' for “' + U.esc(f.q) + '”' : '') + '</h3>' +
+      var active = [];
+      if (f.q) active.push('text “' + U.esc(f.q) + '”');
+      if (f.type !== 'any') active.push('type: ' + f.type);
+      if (f.status !== 'any') active.push('status: ' + f.status);
+      if (f.tag) active.push('tag #' + U.esc(f.tag));
+      if (f.confMin) active.push('conf ≥' + Math.round(f.confMin * 100) + '%');
+      if (f.source) { var sp = W.prompts.filter(function (x) { return x.id === f.source; })[0]; active.push('source: ' + (sp ? U.esc(sp.name) : '?')); }
+      box.innerHTML = (active.length ? '<div class="small muted" style="margin-bottom:8px">🔎 Filtering by: ' + active.map(function (a) { return '<span class="pill">' + a + '</span>'; }).join(' ') +
+        '</div>' : '') + '<div class="two-col"><div><div class="card"><h3>' + res.length + ' result(s)' + (f.q ? ' for “' + U.esc(f.q) + '”' : '') + '</h3>' +
         (res.slice(0, 80).map(function (r) {
           return '<div class="search-hit" data-hit="' + U.esc(r.node.id) + '"><div class="row">' + ui.typeIcon(r.node.type) + ' <strong>' + U.highlight(r.node.title, f.q) + '</strong>' +
             (r.neighbor ? '<span class="pill">neighbor</span>' : '') + '<span class="flex-spacer"></span>' + ui.statusPill(r.node) + '</div>' +
@@ -486,15 +531,20 @@
       '<div class="small muted" style="margin-top:6px">⏱ Browsing history</div>' + items(W.history, 'nothing yet');
   }
   function searchQA(W, host, ui) {
+    var detail = !!ui.state.qaDetail;
     host.innerHTML = '<div class="card"><h3>Ask about this workspace</h3>' +
-      '<div class="row"><input type="text" id="qaQ" class="grow" placeholder="e.g. how does login work?"><button class="btn primary" id="qaGo">Ask</button></div>' +
+      '<div class="row"><input type="text" id="qaQ" class="grow" placeholder="e.g. how does login work?">' +
+      '<select id="qaMode" style="max-width:150px" title="How many matching nodes to show"><option value="short"' + (!detail ? ' selected' : '') + '>Top 3 matches</option>' +
+      '<option value="detailed"' + (detail ? ' selected' : '') + '>Detailed (6)</option></select>' +
+      '<button class="btn primary" id="qaGo">Ask</button></div>' +
       '<div id="qaOut"></div></div>';
     function ask() {
       var q = host.querySelector('#qaQ').value.trim();
       if (!q) return;
       var a = PO.analyze.answerQuestion(W, q);
+      var hits = detail ? a.hits : a.hits.slice(0, 3);
       host.querySelector('#qaOut').innerHTML = '<div class="qa-answer">' + U.esc(a.text) + '</div>' +
-        a.hits.map(function (h) {
+        hits.map(function (h) {
           return '<div class="search-hit" data-hit="' + U.esc(h.node.id) + '"><strong>' + U.highlight(h.node.title, q) + '</strong> ' + ui.statusPill(h.node) +
             '<div class="small muted">' + U.highlight((h.node.text || '').slice(0, 200), q) + '</div>' +
             (h.node.anchor ? '<div class="tiny dim">⌖ chars ' + h.node.anchor.start + '–' + h.node.anchor.end + ' — click to highlight in Source</div>' : '') + '</div>';
@@ -503,6 +553,7 @@
         x.onclick = function () { ui.select(x.dataset.hit, 'qa'); ui.setTab('source'); };
       });
     }
+    host.querySelector('#qaMode').onchange = function (e) { ui.state.qaDetail = e.target.value === 'detailed'; ask(); };
     host.querySelector('#qaGo').onclick = ask;
     host.querySelector('#qaQ').addEventListener('keydown', function (e) { if (e.key === 'Enter') ask(); });
   }
@@ -556,9 +607,13 @@
     host.querySelectorAll('[data-vd]').forEach(function (b) {
       b.onclick = function () {
         var v = W.versions[+b.dataset.vd];
+        var box = host.querySelector('#vd-' + b.dataset.vd);
+        if (box.dataset.open === '1') { box.innerHTML = ''; box.dataset.open = ''; b.textContent = 'diff'; return; } // toggle closed
         var ops = U.lineDiff((v.before || '').split('\n'), (v.after || '').split('\n'));
         var s = U.diffSummary(ops);
-        host.querySelector('#vd-' + b.dataset.vd).innerHTML = '<div class="small muted">+' + s.add + ' / −' + s.del + '</div><div style="background:#0b0e13;border-radius:8px;padding:6px">' + U.diffHTML(ops) + '</div>';
+        box.dataset.open = '1';
+        b.textContent = 'hide';
+        box.innerHTML = '<div class="small muted">+' + s.add + ' / −' + s.del + '</div><div style="background:#0b0e13;border-radius:8px;padding:6px">' + U.diffHTML(ops) + '</div>';
       };
     });
   }

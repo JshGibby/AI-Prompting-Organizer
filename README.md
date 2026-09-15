@@ -8,6 +8,10 @@ and how it should be explained.
 **Zero dependencies. No build step. No account. Works fully offline** — the exported
 single-file HTML snapshot runs straight from a USB stick.
 
+> 💬 **New — AI Chat ("Ask & Apply")**: chat with an AI that knows your workspace and
+> can make audited edits. Bring your own key (OpenAI by default; any OpenAI-compatible
+> endpoint — OpenRouter, Groq, LM Studio, Ollama). See [AI Chat](#-ai-chat--ask--apply).
+
 ---
 
 ## ▶ Run it
@@ -56,6 +60,7 @@ node test-engine.js   # 30+ assertions over ingest → recompile → eval → me
 | **Code & scripts** | 💻 Scripts | Highlighting + folding, implements-links both directions |
 | **Assets** | 🖼 Assets | Image/PDF preview, metadata, usage tracking; small uploads embedded for portable snapshots |
 | **Knowledge & Q&A** | 📚, 🔎 → Q&A | Glossary, acronyms, index, source map, NL answers with node + anchor pointers |
+| **AI Chat & API-style settings** | 💬 AI Chat | Bring-your-own-key streaming chat over the workspace, reviewable `po-patch` edits with changelog + versions, OpenAI-compatible endpoints |
 
 ---
 
@@ -77,6 +82,11 @@ js/recompile.js     subtree collection, dependency pull-in, budget fit with
                     hard-constraint protection, no-loss proof
 js/tests.js         test cases, scoring rules, deterministic mock model, runs,
                     run comparison, best-version tracking
+js/ai.js            AI chat engine: BYO-key provider settings (localStorage),
+                    OpenAI-compatible streaming client, workspace context builder,
+                    po-patch validation + applier with full audit trail
+js/ui-chat.js       💬 AI Chat side tab: streaming bubbles, patch review cards,
+                    quick actions, provider settings modal, floating launcher
 js/snapshot.js      JSON/ZIP/single-file-HTML export, upload (json/zip/html),
                     merge-or-replace, minimal ZIP reader/writer (stored entries)
 js/graph.js         layered SVG layout, pan/zoom, drag-to-reparent, mind map, timeline
@@ -98,10 +108,73 @@ quote, and a one-click revert.
 
 ---
 
+## 💬 AI Chat — "Ask & Apply"
+
+Open **💬 Chat** (topbar button or `Alt+9`) to talk with an AI that reads your actual
+workspace. Two modes:
+
+- **Ask** — grounded answers about your nodes: "what am I missing?", "which requirements
+  have no implementation?", "explain rule.items-never-lost". Answers cite node ids.
+- **Apply** — ask for a change ("add a rule that sessions expire after 30 minutes and
+  link it to the login feature") and the AI replies with a plan plus a `po-patch`
+  block. You review the ops in a card, then **Apply** — every change lands in the
+  changelog and version ledger exactly like a human edit (update / create / link /
+  delete; dependents are marked stale).
+
+**API-style settings (⚙ AI settings)** — per-user, bring-your-own-key:
+
+| Field | Notes |
+|---|---|
+| Provider | OpenAI, OpenRouter, Groq, Cerebras, Google Gemini, Mistral, Together, **LM Studio (local)**, **Ollama (local)** |
+| API base URL | Any OpenAI-compatible `/v1` endpoint works |
+| Model | Free text with per-provider suggestions |
+| API key | Stored only in your browser's localStorage; sent only to your provider |
+| Extra system instructions | Optional house rules for tone/format |
+
+"Test connection" verifies the key before you save. The settings panel also shows a
+**free-model table** — context window and free-tier limits (requests/min, daily caps)
+per model — and local providers (Ollama / LM Studio) always work with no cloud at all.
+
+A **ctx meter** under the chat shows tokens used vs your model's context window (with a
+✂ trim button), the **📊 button** shows local AI-efficiency stats (messages, tokens, avg
+reply speed, per-model breakdown), and the quick-action chips above the composer adapt
+to your workspace ("Explain 3 coverage gaps", "Resolve 2 conflicts"…).
+
+**Patch format** (what the AI emits — validated client-side, max 25 ops):
+
+```json
+{ "ops": [
+  { "op": "update", "id": "rule.items-never-lost", "text": "full new verbatim text" },
+  { "op": "create", "type": "rule", "title": "Session timeout", "text": "Sessions must expire…" },
+  { "op": "link", "a": "rule.session-timeout", "b": "feature.login", "rel": "requires" },
+  { "op": "delete", "id": "idea.old-idea", "reason": "superseded" }
+] }
+```
+
+---
+
 ## Keyboard
 
-`Ctrl+1..7` main tabs · `Alt+1..8` side tabs · `/` search · `N` new prompt ·
+`Ctrl+1..9` main tabs (Prompts → **Issues** → **Guide**) · `Alt+1..9` side tabs (Tree →
+Assets, incl. AI Chat) · `G`/`T`/`D` Guide/Tree/Dashboard · `/` search · `N` new prompt ·
 `[`/`]` prev/next node · `?` help · `Esc` close dialog
+
+## New in this build
+
+- **📖 Guide tab** — a friendly tutorial for every tab plus a **60-second tour** that walks
+  your real workspace (Ctrl+9).
+- **⚠ Issues tab** — every app error in one console (with copy-all) plus **automatic
+  workspace checks**: broken links, parentless nodes, coverage gaps, duplicates. Ctrl+8.
+- **🎨 ⚙ Preferences** — six themes (Midnight, Ocean, Forest, Sunset, Candy, Paper),
+  text-size slider, Comfy/Compact spacing, Calm animations, and confetti you can turn off.
+- **💡 Rotating tips** — 30 premade suggestions, 6 shown at a time, auto-rotate every
+  2 minutes with pause/shuffle.
+- **🕸 Movable graph** — drag nodes anywhere (positions save with the workspace),
+  ✨ Auto-arrange snaps to a tidy anti-overlap grid, and overlaps can't happen at all.
+- **🗂 Folder-organized ZIP** — exports now include `scripts/`, `documents/`,
+  `prompts/`, `requirements/`, `assets/` folders alongside the per-folder READMEs.
+- **📊 Synced statistics** — Dashboard, Review Queue badge, and status bar share one
+  computed-per-render stats pass, so numbers always agree.
 
 ## File formats
 

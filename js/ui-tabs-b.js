@@ -75,13 +75,18 @@
       }).join('') + '</select>' +
       '<label class="small"><input type="checkbox" id="gFocus"' + (gf.focus ? ' checked' : '') + '> focus selection ±2 hops</label>' +
       '<label class="small"><input type="checkbox" id="gHide"' + (gf.hideFolders ? ' checked' : '') + '> hide folders</label>' +
+      '<span class="flex-spacer"></span>' +
+      '<button class="btn sm" id="gArrange" title="Snap nodes to a tidy anti-overlap grid">✨ Auto-arrange</button>' +
+      '<button class="btn sm" id="gClearArr" title="Forget saved positions and re-layout">clear arrangement</button>' +
       '<button class="btn sm" id="gReset">reset view</button></div></div>' +
+      '<div class="tiny muted" style="margin:4px 2px 8px">Drag nodes to arrange them — positions are saved with the workspace. Drag a node onto another to re-parent it.</div>' +
       '<div id="graphWrap"></div><div class="graph-legend">' +
       Object.keys(PO.graph.TYPE_COLORS).map(function (t) { return '<span><span class="dot" style="background:' + PO.graph.TYPE_COLORS[t] + '"></span>' + t + '</span>'; }).join('') + '</div>';
     var ctl = PO.graph.render(body.querySelector('#graphWrap'), W, {
       selectedId: ui.state.nodeId, filter: Object.assign({}, gf, { q: ui.state.filters.q, focus: gf.focus ? (ui.state.nodeId || null) : null }),
       onSelect: function (id) { ui.select(id, 'graph'); },
-      onReparent: function (src, dst) { ui.reparentNode(W, src, dst); PO.store.persist(); }
+      onReparent: function (src, dst) { ui.reparentNode(W, src, dst); PO.store.persist(); },
+      onPositions: function (pos) { PO.graph.savePositions(W, pos); PO.store.persist(); }
     });
     body.querySelector('#gType').onchange = function (e) { gf.type = e.target.value; ui.render(); };
     body.querySelector('#gStatus').onchange = function (e) { gf.status = e.target.value; ui.render(); };
@@ -89,6 +94,24 @@
     body.querySelector('#gFocus').onchange = function (e) { gf.focus = e.target.checked; ui.render(); };
     body.querySelector('#gHide').onchange = function (e) { gf.hideFolders = e.target.checked; ui.render(); };
     body.querySelector('#gReset').onclick = function () { ctl.reset(); };
+    body.querySelector('#gClearArr').onclick = function () { PO.graph.savePositions(W, {}); ui.render(); ui.toast('Arrangement cleared — nodes re-flowed by layer.', 'ok'); };
+    body.querySelector('#gArrange').onclick = function () {
+      var pos = ctl.pos || {};
+      var arr = Object.keys(pos).map(function (k) { return { id: k, x: pos[k].x, y: pos[k].y }; });
+      arr.sort(function (a, b) { return a.y - b.y || a.x - b.x; });
+      var cols = Math.max(3, Math.ceil(Math.sqrt(arr.length)));
+      var cellW = Math.min(180, (ctl.svg.clientWidth || 900) / cols);
+      var cellH = 64;
+      var neat = {};
+      arr.forEach(function (n, i) {
+        var col = i % cols, row = Math.floor(i / cols);
+        neat[n.id] = { x: Math.round(90 + col * cellW), y: Math.round(40 + row * cellH) };
+      });
+      PO.graph.savePositions(W, neat);
+      PO.store.persist();
+      ui.render();
+      ui.toast('Arranged ' + arr.length + ' nodes into a tidy grid.', 'ok');
+    };
   };
 
   /* ================= NODE ================= */

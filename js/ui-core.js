@@ -12,22 +12,25 @@
 
   var MAIN_TABS = [
     { id: 'prompts', label: 'Prompts', icon: '📝', key: 'Ctrl+1' },
-    { id: 'review', label: 'Review Queue', icon: '🛎', key: 'Ctrl+2', count: true },
-    { id: 'dashboard', label: 'Dashboard', icon: '📊', key: 'Ctrl+3' },
+    { id: 'dashboard', label: 'Dashboard', icon: '📊', key: 'Ctrl+2' },
+    { id: 'review', label: 'Review Queue', icon: '🛎', key: 'Ctrl+3', count: true },
     { id: 'search', label: 'Search', icon: '🔎', key: 'Ctrl+4' },
     { id: 'versions', label: 'Versions', icon: '🕘', key: 'Ctrl+5' },
     { id: 'trace', label: 'Traceability', icon: '🔗', key: 'Ctrl+6' },
-    { id: 'recompile', label: 'Recompile', icon: '🧩', key: 'Ctrl+7' }
+    { id: 'recompile', label: 'Recompile', icon: '🧩', key: 'Ctrl+7' },
+    { id: 'issues', label: 'Issues', icon: '⚠', key: 'Ctrl+8', count: true, badgeKind: 'issues' },
+    { id: 'guide', label: 'Guide', icon: '📖', key: 'Ctrl+9' }
   ];
   var SIDE_TABS = [
     { id: 'tree', label: 'Tree', icon: '🌳', key: 'Alt+1' },
-    { id: 'graph', label: 'Graph', icon: '🕸', key: 'Alt+2' },
-    { id: 'node', label: 'Node', icon: '📄', key: 'Alt+3' },
-    { id: 'source', label: 'Source', icon: '⌖', key: 'Alt+4' },
-    { id: 'readmes', label: 'READMEs', icon: '📚', key: 'Alt+5' },
+    { id: 'node', label: 'Node', icon: '📄', key: 'Alt+2' },
+    { id: 'graph', label: 'Graph', icon: '🕸', key: 'Alt+3' },
+    { id: 'chat', label: 'AI Chat', icon: '💬', key: 'Alt+4' },
+    { id: 'source', label: 'Source', icon: '⌖', key: 'Alt+5' },
     { id: 'scripts', label: 'Scripts', icon: '💻', key: 'Alt+6' },
     { id: 'documents', label: 'Documents', icon: '📑', key: 'Alt+7' },
-    { id: 'assets', label: 'Assets', icon: '🖼', key: 'Alt+8' }
+    { id: 'readmes', label: 'READMEs', icon: '📚', key: 'Alt+8' },
+    { id: 'assets', label: 'Assets', icon: '🖼', key: 'Alt+9' }
   ];
   var TYPE_ICONS = {
     topic: '📁', feature: '✨', mechanic: '⚙️', rule: '📏', idea: '💡',
@@ -81,8 +84,11 @@
       }
     } catch (e) { /* ignore */ }
 
+    if (PO.prefs && PO.prefs.boot) PO.prefs.boot();
     wireTopbar();
     wireKeyboard();
+    if (PO.issues && PO.issues.installErrorHooks) PO.issues.installErrorHooks();
+    if (PO.chat && PO.chat.wireLauncher) PO.chat.wireLauncher();
     window.addEventListener('hashchange', routeFromHash);
     routeFromHash();
     render();
@@ -97,6 +103,7 @@
     $('btnSnapshot').onclick = function () { PO.snapshot.downloadSnapshot(); };
     $('btnNewPrompt').onclick = function () { openNewPromptModal(); };
     $('btnHelp').onclick = function () { openHelpModal(); };
+    $('btnPrefs').onclick = function () { PO.prefs.openSettings(); };
     $('btnUpload').onclick = function () { $('fileInput').click(); };
     $('fileInput').addEventListener('change', function (ev) {
       var f = ev.target.files[0];
@@ -181,12 +188,12 @@
       if (ev.key === 'Escape') { closeModal(); return; }
       if (ev.ctrlKey || ev.metaKey) {
         var n = parseInt(ev.key, 10);
-        if (n >= 1 && n <= 7) { ev.preventDefault(); setTab(MAIN_TABS[n - 1].id); }
+        if (n >= 1 && n <= 9) { ev.preventDefault(); setTab(MAIN_TABS[n - 1].id); }
         return;
       }
       if (ev.altKey) {
         var m = parseInt(ev.key, 10);
-        if (m >= 1 && m <= 8) { ev.preventDefault(); setTab(SIDE_TABS[m - 1].id); }
+        if (m >= 1 && m <= 9) { ev.preventDefault(); setTab(SIDE_TABS[m - 1].id); }
         return;
       }
       if (typing) return;
@@ -195,6 +202,9 @@
       else if (ev.key === '/') { ev.preventDefault(); setTab('search'); setTimeout(function () { var q = $('gSearch'); if (q) q.focus(); }, 60); }
       else if (ev.key === '[') stepSelection(-1);
       else if (ev.key === ']') stepSelection(1);
+      else if (ev.key === 'g' || ev.key === 'G') setTab('guide');
+      else if (ev.key === 't' || ev.key === 'T') setTab('tree');
+      else if (ev.key === 'd' || ev.key === 'D') setTab('dashboard');
     });
   }
   function flatTreeOrder() {
@@ -235,6 +245,10 @@
     var w = W();
     if (!w) return;
     renderTabBars(w);
+    if (PO.suggest) {
+      var sb = $('suggestBar');
+      if (sb && !sb.dataset.mounted) { sb.dataset.mounted = '1'; PO.suggest.mount(sb, api); }
+    }
     var host = $('tabContent');
     host.innerHTML = '';
     var fn = PO.uiTabs[state.tab];
@@ -252,9 +266,12 @@
   }
   function renderTabBars(w) {
     var reviewCount = PO.analyze.reviewQueue(w).length;
+    var issueCount = (PO.issues && PO.issues.ERRORS ? PO.issues.ERRORS.length : 0);
     var ms = $('mainStrip');
     ms.innerHTML = MAIN_TABS.map(function (t) {
-      var c = t.count ? '<span class="count' + (reviewCount ? ' alert' : '') + '">' + reviewCount + '</span>' : '';
+      var c = '';
+      if (t.badgeKind === 'issues') c = '<span class="count' + (issueCount ? ' alert' : '') + '"' + (issueCount ? '' : ' hidden') + '>' + issueCount + '</span>';
+      else if (t.count) c = '<span class="count' + (reviewCount ? ' alert' : '') + '">' + reviewCount + '</span>';
       return '<button class="tab" role="tab" data-tab="' + t.id + '" aria-selected="' + (state.tab === t.id) + '" title="' + U.esc(t.label + ' (' + t.key + ')') + '">' +
         '<span>' + t.icon + '</span><span class="tab-label">' + U.esc(t.label) + '</span>' + c + '</button>';
     }).join('');
@@ -302,9 +319,13 @@
     var he = $('statHealth');
     he.textContent = 'health ' + h.score + '/100';
     he.className = h.score >= 75 ? 'ok-t' : (h.score >= 50 ? 'warn-t' : 'bad-t');
+    he.title = 'Click a factor on the Dashboard to see what is dragging the score down.';
     var sel = state.nodeId && w.nodes[state.nodeId];
-    $('statSel').textContent = sel ? ('◉ ' + sel.id) : 'nothing selected';
-    $('statSel').title = sel ? sel.title : 'Selected node';
+    var selEl = $('statSel');
+    selEl.textContent = sel ? ('◉ ' + sel.id) : 'nothing selected';
+    selEl.title = sel ? (sel.title + ' — click to open Node view') : 'Selected node';
+    selEl.style.cursor = sel ? 'pointer' : '';
+    selEl.onclick = sel ? function () { setTab('node'); } : null;
   }
 
   /* ================= shared components ================= */
@@ -564,8 +585,9 @@
   function openHelpModal() {
     openModal('<h2>⌨ Keyboard shortcuts</h2>',
       '<table class="tbl"><tr><th>Keys</th><th>Action</th></tr>' +
-      '<tr><td><kbd>Ctrl</kbd>+<kbd>1..7</kbd></td><td>Main tabs (Prompts … Recompile)</td></tr>' +
-      '<tr><td><kbd>Alt</kbd>+<kbd>1..8</kbd></td><td>Side tabs (Tree … Assets)</td></tr>' +
+      '<tr><td><kbd>Ctrl</kbd>+<kbd>1..9</kbd></td><td>Main tabs (Prompts → Guide)</td></tr>' +
+      '<tr><td><kbd>Alt</kbd>+<kbd>1..9</kbd></td><td>Side tabs (Tree → Assets, incl. AI Chat)</td></tr>' +
+      '<tr><td><kbd>G</kbd> / <kbd>T</kbd> / <kbd>D</kbd></td><td>Guide / Tree / Dashboard</td>' +
       '<tr><td><kbd>/</kbd></td><td>Jump to search</td></tr>' +
       '<tr><td><kbd>N</kbd></td><td>New prompt</td></tr>' +
       '<tr><td><kbd>[</kbd> / <kbd>]</kbd></td><td>Previous / next node in tree order</td></tr>' +
@@ -611,9 +633,15 @@
         }
       }]);
     var ta = $('npText'), st = $('npStats');
-    ta.addEventListener('input', function () {
-      st.textContent = U.wordsOf(ta.value) + ' words · ~' + U.fmtNum(U.tokenEstimate(ta.value)) + ' tokens · ' + U.readingTimeMin(ta.value) + ' min read';
-    });
+    function updStats() {
+      var words = U.wordsOf(ta.value);
+      st.textContent = words + ' words · ~' + U.fmtNum(U.tokenEstimate(ta.value)) + ' tokens · ' + U.readingTimeMin(ta.value) + ' min read';
+      st.style.color = words > 20000 ? 'var(--warn)' : '';
+    }
+    ta.addEventListener('input', updStats);
+    var preName = (($('npName') || {}).value || '').trim();
+    if (preName && w.prompts.some(function (p) { return p.name === preName; }))
+      toast('A prompt named “' + U.esc(preName) + '” already exists — picking it as the Target above adds a version instead of creating a duplicate.', 'warn');
     $('npSample').onclick = function () {
       ta.value = PO.app.samplePrompt();
       ta.dispatchEvent(new Event('input'));

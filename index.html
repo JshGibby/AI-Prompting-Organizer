@@ -20,11 +20,13 @@
       <span id="saveState" class="save-state" title="Persistence status">●</span>
     </div>
     <div class="top-actions">
+      <button class="btn ghost" id="btnChat" title="Chat with the AI about this workspace (Alt+4)">💬 Chat</button>
       <button class="btn ghost" id="btnUpload" title="Upload a saved workspace (.json / .zip)">⤒ Upload</button>
       <button class="btn ghost" id="btnSaveJSON" title="Download workspace as JSON">⤓ JSON</button>
-      <button class="btn ghost" id="btnSaveZIP" title="Download workspace as ZIP">⤓ ZIP</button>
+      <button class="btn ghost" id="btnSaveZIP" title="Download workspace as a folder-organized ZIP">⤓ ZIP</button>
       <button class="btn primary" id="btnSnapshot" title="Download a single-file HTML snapshot that works fully offline">⤓ Offline snapshot</button>
       <button class="btn ghost" id="btnNewPrompt" title="Paste a new prompt (N)">＋ Prompt</button>
+      <button class="btn icon" id="btnPrefs" title="Themes, text size, animations, spacing">⚙</button>
       <button class="btn icon" id="btnHelp" title="Keyboard shortcuts (?)">?</button>
       <input type="file" id="fileInput" accept=".json,.zip,application/json,application/zip" hidden>
     </div>
@@ -33,6 +35,7 @@
   <nav id="mainTabs" aria-label="Main tabs">
     <div class="tab-strip" id="mainStrip" role="tablist"></div>
   </nav>
+  <div id="suggestBar"></div>
 
   <div id="workbench">
     <aside id="sideTabs" aria-label="Item tabs">
@@ -51,7 +54,7 @@
     <span id="statNodes" title="Nodes">— nodes</span>
     <span class="sep">·</span><span id="statLinks" title="Connections">— links</span>
     <span class="sep">·</span><span id="statHealth" title="Workspace health">health —</span>
-    <span class="sep">·</span><span id="statSel" title="Selected node">nothing selected</span>
+    <span class="sep">·</span>    <span id="statSel" title="Selected node" style="cursor:pointer">nothing selected</span>
     <span class="flex-spacer"></span>
     <span id="statRoute" title="Deep link">—</span>
     <button class="btn ghost sm" id="btnCopyLink" title="Copy deep link to this view">⧉ link</button>
@@ -68,11 +71,16 @@
 <script src="js/readme.js"></script>
 <script src="js/recompile.js"></script>
 <script src="js/tests.js"></script>
+<script src="js/ai.js"></script>
 <script src="js/snapshot.js"></script>
+<script src="js/prefs.js"></script>
+<script src="js/suggest.js"></script>
 <script src="js/graph.js"></script>
 <script src="js/ui-core.js"></script>
+<script src="js/ui-chat.js"></script>
 <script src="js/ui-tabs-a.js"></script>
 <script src="js/ui-tabs-b.js"></script>
+<script src="js/ui-extra-tabs.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
