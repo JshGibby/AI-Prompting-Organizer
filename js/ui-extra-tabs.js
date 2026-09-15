@@ -81,7 +81,7 @@
     { id: 'readmes', title: '📚 READMEs & knowledge', body:
       '<p>Auto-generated docs: a README for the root and every folder, plus a Glossary, Acronym list, full Index and a Source map. They regenerate on change, and the changelog records the update.</p>' },
     { id: 'chat', title: '💬 AI Chat (optional)', body:
-      '<p>Bring your own key (OpenAI, Groq, OpenRouter, local Ollama and more — free models listed with their quotas). Ask about the workspace, or request edits: the AI replies with a plan plus a patch you review and apply. The context meter shows how much of the model\'s window you\'re using.</p>' },
+      '<p>Bring your own key (OpenAI, Groq, OpenRouter, local Ollama and more — configurable providers). Ask about the workspace, or request edits: the AI replies with a plan plus a patch you review and apply. The context meter shows how much of the model\'s window you\'re using.</p>' },
     { id: 'extras', title: '⚠ Issues · 🎨 Themes · 🛰 Tips', body:
       '<p><strong>Issues</strong> collects every error plus automatic workspace checks. <strong>⚙ (top bar)</strong> opens themes, text size, animations and spacing — make it yours. The <strong>tips row</strong> under the tab bar rotates 30 ways to work smarter, six at a time.</p>' }
   ];

@@ -12,6 +12,7 @@
      apply it with full audit trail (changelog + version ledger),
      exactly like a human edit.
    No dependencies. No keys shipped in the repo.
+   Configuration settings are fully preserved; no free-model table.
    ============================================================ */
 (function () {
   'use strict';
@@ -23,45 +24,45 @@
   var PRESETS = {
     openai: {
       label: 'OpenAI', baseUrl: 'https://api.openai.com/v1',
-      models: ['gpt-4o-mini', 'gpt-4.1-mini', 'gpt-4o', 'gpt-4.1'],
+      models: ['gpt-4o-mini', 'gpt-4.1-mini', 'gpt-4o', 'gpt-4.1', 'o4-mini'],
       keyHint: 'sk-…', docs: 'https://platform.openai.com/api-keys',
       note: 'Create an API key at platform.openai.com — it stays in your browser.'
     },
     openrouter: {
       label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1',
-      models: ['meta-llama/llama-3.3-70b-instruct:free', 'deepseek/deepseek-chat-v3-0324:free', 'qwen/qwen-2.5-72b-instruct:free', 'google/gemini-2.0-flash-exp:free', 'mistralai/mistral-small-3.1-24b-instruct:free'],
+      models: ['openai/gpt-4o-mini', 'meta-llama/llama-3.3-70b-instruct', 'anthropic/claude-3.5-sonnet', 'google/gemini-2.0-flash-001', 'mistralai/mistral-small-3.1-24b-instruct'],
       keyHint: 'sk-or-…', docs: 'https://openrouter.ai/keys',
-      note: 'One key, hundreds of models. Models ending in :free are $0 — they rotate, so check the Models page for what is live today.'
+      note: 'One key, many models. Use any model id supported by OpenRouter.'
     },
     groq: {
       label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1',
-      models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'deepseek-r1-distill-llama-70b'],
+      models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'llama-3.2-90b-text-preview', 'mixtral-8x7b-32768'],
       keyHint: 'gsk_…', docs: 'https://console.groq.com/keys',
-      note: 'Extremely fast. Free tier with per-model daily caps (see the quota table below).'
+      note: 'Ultra-fast inference. Configure your own rate limits in Groq console.'
     },
     cerebras: {
       label: 'Cerebras', baseUrl: 'https://api.cerebras.ai/v1',
       models: ['llama-3.3-70b', 'llama3.1-8b'],
       keyHint: 'csk-…', docs: 'https://cloud.cerebras.ai',
-      note: 'Free tier, blazing inference speeds. Daily request cap on the free plan.'
+      note: 'High-speed inference endpoint.'
     },
     gemini: {
       label: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-      models: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'],
+      models: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-pro'],
       keyHint: 'AI…', docs: 'https://aistudio.google.com/apikey',
-      note: 'Google AI Studio keys are free to start; Flash models have generous per-minute free limits. OpenAI-compatible endpoint.'
+      note: 'Google AI Studio key — OpenAI-compatible endpoint.'
     },
     mistral: {
       label: 'Mistral (La Plateforme)', baseUrl: 'https://api.mistral.ai/v1',
-      models: ['mistral-small-latest', 'open-mistral-nemo', 'mistral-large-latest'],
+      models: ['mistral-small-latest', 'open-mistral-nemo', 'mistral-large-latest', 'codestral-latest'],
       keyHint: '…', docs: 'https://console.mistral.ai/api-keys',
-      note: 'Free experiment tier with per-minute / per-month caps after opt-in.'
+      note: 'Mistral API — configure limits in console.'
     },
     together: {
       label: 'Together AI', baseUrl: 'https://api.together.xyz/v1',
-      models: ['meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo'],
+      models: ['meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo', 'meta-llama/Llama-3.3-70B-Instruct-Turbo', 'mistralai/Mixtral-8x7B-Instruct-v0.1'],
       keyHint: '…', docs: 'https://api.together.ai/settings/api-keys',
-      note: 'The -Turbo-Free Llama model is free; other models are pay-as-you-go.'
+      note: 'Together AI — serverless inference.'
     },
     lmstudio: {
       label: 'LM Studio (local)', baseUrl: 'http://localhost:1234/v1',
@@ -71,34 +72,57 @@
     },
     ollama: {
       label: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1',
-      models: ['llama3.2', 'qwen2.5', 'mistral', 'gemma2'],
+      models: ['llama3.2', 'qwen2.5', 'mistral', 'gemma2', 'deepseek-r1'],
       keyHint: 'ollama', docs: 'https://ollama.com',
       note: 'Runs on your machine, unlimited and private. Start with OLLAMA_ORIGINS=* ollama serve.'
     }
   };
 
-  /* Free-model intel: context windows + quota summaries shown in settings.
-     ctx = usable context window in tokens. quota = what you get for $0. */
-  var FREE_MODELS = {
-    'llama-3.3-70b-versatile':                    { ctx: 128000, quota: 'Free tier: ~1,000 req/day shared across models (per-model daily caps, resets midnight UTC).' },
-    'llama-3.1-8b-instant':                       { ctx: 128000, quota: 'Free tier: ~1,000 req/day shared across models (per-model daily caps, resets midnight UTC).' },
-    'deepseek-r1-distill-llama-70b':              { ctx: 128000, quota: 'Free tier daily cap, resets midnight UTC.' },
-    'llama-3.3-70b':                              { ctx: 128000, quota: 'Free plan: ~30,000 requests/day at up to ~2,200 tok/s.' },
-    'llama3.1-8b':                                { ctx: 128000, quota: 'Free plan: ~30,000 requests/day at up to ~2,200 tok/s.' },
-    'meta-llama/llama-3.3-70b-instruct:free':     { ctx: 128000, quota: '$0 model: ~20 req/min, 1,000 req/day on the free tier.' },
-    'deepseek/deepseek-chat-v3-0324:free':        { ctx: 64000,  quota: '$0 model: ~20 req/min, 1,000 req/day on the free tier.' },
-    'qwen/qwen-2.5-72b-instruct:free':            { ctx: 32000,  quota: '$0 model: ~20 req/min, 1,000 req/day on the free tier.' },
-    'google/gemini-2.0-flash-exp:free':           { ctx: 1000000, quota: '$0 model: ~20 req/min, 1,000 req/day on the free tier.' },
-    'mistralai/mistral-small-3.1-24b-instruct:free': { ctx: 96000, quota: '$0 model: ~20 req/min, 1,000 req/day on the free tier.' },
-    'gemini-2.0-flash':                           { ctx: 1000000, quota: 'Free tier: 15 req/min, 1,500 req/day (AI Studio key).' },
-    'gemini-2.0-flash-lite':                      { ctx: 1000000, quota: 'Free tier: 30 req/min, 1,500 req/day (AI Studio key).' },
-    'gemini-1.5-flash':                           { ctx: 1000000, quota: 'Free tier: 15 req/min, 1,500 req/day (AI Studio key).' },
-    'mistral-small-latest':                       { ctx: 128000, quota: 'Free experiment tier: 1 req/sec, ~500k tokens/min, 1B tokens/month after opt-in.' },
-    'open-mistral-nemo':                          { ctx: 128000, quota: 'Free experiment tier: 1 req/sec, ~500k tokens/min, 1B tokens/month after opt-in.' },
-    'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free': { ctx: 128000, quota: 'Free: rate-limited per minute; no daily cap published (may change).' }
+  /* Model context windows — no quota table, just technical limits */
+  var MODEL_CTX = {
+    'gpt-4o-mini': 128000,
+    'gpt-4.1-mini': 128000,
+    'gpt-4o': 128000,
+    'gpt-4.1': 128000,
+    'o4-mini': 128000,
+    'llama-3.3-70b-versatile': 128000,
+    'llama-3.1-8b-instant': 128000,
+    'llama-3.2-90b-text-preview': 128000,
+    'mixtral-8x7b-32768': 32768,
+    'llama-3.3-70b': 128000,
+    'llama3.1-8b': 128000,
+    'openai/gpt-4o-mini': 128000,
+    'meta-llama/llama-3.3-70b-instruct': 128000,
+    'anthropic/claude-3.5-sonnet': 200000,
+    'google/gemini-2.0-flash-001': 1000000,
+    'mistralai/mistral-small-3.1-24b-instruct': 128000,
+    'gemini-2.0-flash': 1000000,
+    'gemini-2.0-flash-lite': 1000000,
+    'gemini-1.5-flash': 1000000,
+    'gemini-1.5-pro': 1000000,
+    'mistral-small-latest': 128000,
+    'open-mistral-nemo': 128000,
+    'mistral-large-latest': 128000,
+    'codestral-latest': 32000,
+    'meta-llama/Llama-3.3-70B-Instruct-Turbo': 128000,
+    'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo': 128000,
+    'llama3.2': 128000,
+    'qwen2.5': 128000,
+    'mistral': 32000,
+    'gemma2': 8192,
+    'deepseek-r1': 128000,
+    'local-model': 32000
   };
+
   function modelInfo(model) {
-    return FREE_MODELS[model] || null;
+    var ctx = MODEL_CTX[model] || null;
+    if (!ctx) {
+      var m = String(model||'').toLowerCase();
+      if (m.indexOf('gemini')>=0) ctx = 1000000;
+      else if (m.indexOf('claude')>=0) ctx = 200000;
+      else ctx = 128000;
+    }
+    return { ctx: ctx };
   }
   function localProvider(p) { return p === 'ollama' || p === 'lmstudio'; }
 
@@ -108,7 +132,6 @@
     try { return JSON.parse(localStorage.getItem(USE_KEY) || '{}'); } catch (e) { return {}; }
   }
   function recordUsage(entry) {
-    // entry: {provider, model, inTok, outTok, ms, chars}
     var u = loadUsage();
     var d = new Date().toISOString().slice(0, 10);
     u[d] = u[d] || { msgs: 0, inTok: 0, outTok: 0, ms: 0, byModel: {} };
@@ -138,15 +161,13 @@
 
   var DEFAULTS = { provider: 'openai', baseUrl: PRESETS.openai.baseUrl, model: 'gpt-4o-mini', apiKey: '', systemExtra: '' };
 
-  /* model context-window lookup for the chat meter (fallback ~128k) */
   function contextLimit(cfgLike) {
     if (!cfgLike) return 128000;
-    var free = FREE_MODELS[cfgLike.model];
-    if (free && free.ctx) return free.ctx;
+    var info = MODEL_CTX[cfgLike.model];
+    if (info) return info;
     var m = String(cfgLike.model || '').toLowerCase();
     if (m.indexOf('gemini') >= 0) return 1000000;
-    if (m.indexOf('gpt-4o') >= 0 || m.indexOf('gpt-4.1') >= 0 || m.indexOf('llama') >= 0 || m.indexOf('mistral') >= 0 || m.indexOf('qwen') >= 0 || m.indexOf('deepseek') >= 0) return 128000;
-    if (m.indexOf('gpt-3') >= 0) return 16000;
+    if (m.indexOf('claude') >= 0) return 200000;
     return 128000;
   }
 
@@ -162,12 +183,10 @@
     try { localStorage.setItem(LS_KEY, JSON.stringify(s)); } catch (e) { /* ignore */ }
   }
   function presets() { return PRESETS; }
-  function freeModels() { return FREE_MODELS; }
+  function freeModels() { return MODEL_CTX; } /* kept for compat, now returns ctx map */
   function isLocal(p) { return localProvider(p); }
 
   /* ================= streaming chat client ================= */
-  // messages: [{role:'system'|'user'|'assistant', content:string}]
-  // handlers: {onDelta(text), onDone(fullText), onError(err)}
   function streamChat(cfg, messages, handlers, signal) {
     var url = (cfg.baseUrl || PRESETS.openai.baseUrl).replace(/\/+$/, '') + '/chat/completions';
     return fetch(url, {
@@ -212,7 +231,7 @@
         while ((idx = buf.indexOf('\n')) >= 0) {
           var line = buf.slice(0, idx).replace(/\r$/, '');
           buf = buf.slice(idx + 1);
-          if (/^:\s/.test(line)) continue; // SSE comment (OpenRouter keep-alives)
+          if (/^:\s/.test(line)) continue;
           if (line.indexOf('data:') === 0) flushLine(line.slice(5).trim(), function (txt) { full += txt; handlers.onDelta(txt); });
         }
         return pump();
@@ -229,7 +248,6 @@
     return pump();
   }
 
-  // One-shot helper (no streaming) — used for title generation etc.
   function completeOnce(cfg, messages) {
     return new Promise(function (resolve, reject) {
       var full = '';
@@ -242,7 +260,6 @@
   }
 
   /* ================= workspace context builder ================= */
-  // Compact, retrieval-based context so small models still orient well.
   function buildContext(W, question, opts) {
     opts = opts || {};
     var A = PO.analyze;
@@ -255,7 +272,6 @@
     var health = A.health(W);
     lines.push('HEALTH: ' + health.score + '/100. Orphans ' + st.orphans + ' · uncertain ' + st.uncertain + ' · stale ' + st.stale + ' · conflicts ' + st.conflicts + ' · requirements ' + st.reqs + ' (open coverage gaps: ' + A.coverage(W).gaps.length + ').');
 
-    // selected node first — "what about this?" questions must land here
     if (sel) {
       lines.push('');
       lines.push('SELECTED NODE ' + sel.id + ' — ' + (sel.title || '') + ' [' + sel.type + '/' + sel.status + ']');
@@ -263,7 +279,6 @@
       if (sel.parent && W.nodes[sel.parent]) lines.push('PARENT: ' + sel.parent + ' — ' + W.nodes[sel.parent].title);
     }
 
-    // retrieval: question terms + selected node's neighbors
     var q = String(question || '') + ' ' + (sel ? (sel.title + ' ' + sel.text.slice(0, 200)) : '');
     var scored = A.searchNodes(W, q, {}).slice(0, 12);
     if (sel) {
@@ -281,13 +296,21 @@
       });
     }
 
-    // open questions / gaps so the assistant can spot what's missing
     var qs = (W.questions || []).filter(function (x) { return !x.resolved; }).slice(0, 4);
     if (qs.length) {
       lines.push('');
       lines.push('OPEN QUESTIONS IN WORKSPACE:');
       qs.forEach(function (x) { lines.push('- ' + x.q + (x.nodeId ? ' (on ' + x.nodeId + ')' : '')); });
     }
+    // Include root readme as overall summary if available
+    try {
+      var rootReadme = (W.readmes && W.readmes['folder.root'] && W.readmes['folder.root'].md) || '';
+      if (rootReadme) {
+        lines.push('');
+        lines.push('PROJECT OVERALL SUMMARY (from README):');
+        lines.push(rootReadme.slice(0, 2000));
+      }
+    } catch(e){}
     return lines.join('\n');
   }
 
@@ -352,7 +375,6 @@
     });
     return { ok: errs.length === 0, errors: errs };
   }
-  // test hook: allow patch validation against an arbitrary workspace
   var _testW = null;
   function W$1() { return _testW || PO.store.W(); }
   function setWorkspaceForValidation(w) { _testW = w; }
@@ -416,7 +438,6 @@
         var beforeTxt = dn.text;
         delete W.nodes[o.id];
         W.edges = W.edges.filter(function (e) { return e.a !== o.id && e.b !== o.id; });
-        // clean secondary indexes
         W.requirements = (W.requirements || []).filter(function (r) { return r.id !== o.id && r.sourceNodeId !== o.id; });
         W.questions = (W.questions || []).filter(function (q) { return q.nodeId !== o.id; });
         PO.store.addVersion('ai-del', 'AI chat deleted ' + o.id, { nodeId: o.id, before: beforeTxt });
@@ -438,7 +459,6 @@
     return Object.keys(parts).map(function (k) { return parts[k] + ' ' + k; }).join(' · ');
   }
 
-  /* ================= export ================= */
   PO.ai = {
     load: load, save: save, presets: presets,
     freeModels: freeModels, isLocal: isLocal, modelInfo: modelInfo,
@@ -447,6 +467,7 @@
     streamChat: streamChat, completeOnce: completeOnce,
     buildContext: buildContext, systemPrompt: systemPrompt,
     validatePatch: validatePatch, extractPatch: extractPatch, applyPatch: applyPatch,
-    summarizeChanges: summarizeChanges, setWorkspaceForValidation: setWorkspaceForValidation
+    summarizeChanges: summarizeChanges, setWorkspaceForValidation: setWorkspaceForValidation,
+    MODEL_CTX: MODEL_CTX
   };
 })();

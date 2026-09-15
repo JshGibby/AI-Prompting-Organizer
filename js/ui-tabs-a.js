@@ -394,7 +394,7 @@
       (ai ? '<div class="row" style="gap:14px"><div><div class="stat" style="border:none;background:transparent;padding:2px"><div class="v">' + ai.todayMsgs + '</div><div class="l">messages today</div></div></div>' +
         '<div><div class="stat" style="border:none;background:transparent;padding:2px"><div class="v">~' + U.fmtNum(ai.todayTok) + '</div><div class="l">tokens today</div></div></div>' +
         '<div><div class="stat" style="border:none;background:transparent;padding:2px"><div class="v">' + ai.weekMsgs + '</div><div class="l">this week</div></div></div></div>' +
-        '<p class="tiny muted">Counted locally in this browser. Free-tier quotas per model live in the chat\'s ⚙ AI settings.</p>' :
+        '<p class="tiny muted">Counted locally in this browser. Configure providers in the chat\'s ⚙ AI settings.</p>' :
         '<p class="small muted">No AI usage tracked yet — open 💬 AI Chat to start. Everything else works offline.</p>') +
       '<div class="row"><button class="btn sm primary" data-goto data-tab="chat">💬 Ask the AI</button></div></div>' +
       '<div class="card"><h3>Quick actions</h3><div class="row"><button class="btn sm primary" id="dNew">＋ Prompt</button>' +

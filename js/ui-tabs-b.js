@@ -9,14 +9,27 @@
 
   /* ================= TREE ================= */
   PO.uiTabs.tree = function (W, host, ui, opts) {
-    host.innerHTML = ui.tabHeadHTML(W, 'File tree', 'Branching workspace. Drag any row onto another to re-parent. <kbd>[</kbd>/<kbd>]</kbd> steps selection.', { pin: 'tree' }) +
+    host.innerHTML = ui.tabHeadHTML(W, 'File tree', 'Branching workspace. Drag to re-parent · <kbd>[</kbd>/<kbd>]</kbd> steps · <kbd>Ctrl+K</kbd> palette · Right-click any row for Full Text & AI Enhance · <span class="pro-badge">PRO</span> Multi-select with Ctrl/Shift, double-click to rename, ✨ hover button for AI branch editor.', { pin: 'tree' }) +
       (opts && opts.pinned ? '' : ui.filterBarHTML(W)) +
       '<div class="toolbar"><button class="btn sm" id="tExpand">▾ expand all</button><button class="btn sm" id="tCollapse">▸ collapse</button>' +
-      '<button class="btn sm" id="tFolder">＋ folder</button></div>' +
+      '<button class="btn sm" id="tFolder">＋ folder</button>' +
+      '<button class="btn sm ghost" id="tCmd">⌘ Palette (Ctrl+K)</button>' +
+      '<button class="btn sm ghost" id="tFocus">🎯 Focus (F)</button>' +
+      '<button class="btn sm ghost" id="tFavBar">★ Fav Bar</button>' +
+      '<button class="btn sm ghost" id="tRecent">⏱ Recent</button></div>' +
       '<div class="card" id="treeBox">' + ui.treeHTML(W, 'folder.root', { applyFilters: !!(ui.state.filters.q || ui.state.filters.type !== 'any' || ui.state.filters.status !== 'any' || ui.state.filters.tag) }) + '</div>';
     ui.wireTabHead(host);
     if (!(opts && opts.pinned)) ui.wireFilterBar(host, function () { ui.render(); });
     ui.wireTree(host.querySelector('#treeBox'));
+    // pro tree buttons
+    var bCmd = host.querySelector('#tCmd'); if (bCmd) bCmd.onclick = function () { if (PO.pro) PO.pro.openPalette(); };
+    var bFocus = host.querySelector('#tFocus'); if (bFocus) bFocus.onclick = function () { if (PO.pro) PO.pro.toggleFocus(); };
+    var bFav = host.querySelector('#tFavBar'); if (bFav) bFav.onclick = function () {
+      var bar = document.getElementById('favBar');
+      if (bar) bar.remove();
+      else if (PO.pro && PO.pro.renderFavBar) PO.pro.renderFavBar();
+    };
+    var bRec = host.querySelector('#tRecent'); if (bRec) bRec.onclick = function () { if (PO.pro) PO.pro.toggleRecentDrawer(); };
     host.querySelector('#tExpand').onclick = function () { ui.state.collapsed = {}; ui.render(); };
     host.querySelector('#tCollapse').onclick = function () {
       Object.keys(W.nodes).forEach(function (id) { if (W.nodes[id].type === 'folder' && id !== 'folder.root') ui.state.collapsed[id] = true; });

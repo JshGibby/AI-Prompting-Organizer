@@ -5,6 +5,7 @@
 
    Bring-your-own-key: settings are per browser (localStorage),
    default provider is OpenAI; any OpenAI-compatible endpoint works.
+   Configuration preserved, no free-model references.
    ============================================================ */
 (function () {
   'use strict';
@@ -12,10 +13,9 @@
 
   var S = { msgs: [], busy: false, abort: null, sub: 'chat', ctxCount: 0, showUsage: false };
 
-  /* per-model context meter, evaluated fresh each render */
   function ctxState() {
     var c = cfg();
-    var tok = 900; // system prompt estimate (~900 tok for the workspace context)
+    var tok = 900;
     S.msgs.forEach(function (m) { tok += Math.ceil(((m.text || m.plain || '').length) / 4); });
     var limit = PO.ai.contextLimit(c);
     return { tok: tok, limit: limit, pct: Math.min(100, Math.round(tok / limit * 100)) };
@@ -24,8 +24,6 @@
   function W() { return PO.store.W(); }
   function cfg() { return PO.ai.load(); }
 
-  /* ---------- rendering ---------- */
-  // Guard: this file may load before or after ui-core.js.
   window.PO = window.PO || {};
   window.PO.uiTabs = window.PO.uiTabs || {};
   PO.uiTabs.chat = function (W, host, ui, opts) {
@@ -117,7 +115,6 @@
   }
 
   function richHTML(text) {
-    // Split fences (```po-patch and plain ```) so code renders as code.
     var out = '', rest = String(text || '');
     var re = /```([\w-]*)\n?([\s\S]*?)(?:```|$)/g, m, last = 0;
     while ((m = re.exec(rest))) {
@@ -130,7 +127,6 @@
     return out;
   }
 
-  /* ---------- quick actions: workspace-aware chips ---------- */
   function quickActions(W) {
     var A = PO.analyze, st = A.stats(W), acts = [];
     var gaps = A.coverage(W).gaps.length;
@@ -158,7 +154,6 @@
     });
   }
 
-  /* ---------- wiring ---------- */
   function wire(host, ui) {
     var input = host.querySelector('#chatInput');
     var sendBtn = host.querySelector('#chatSend');
@@ -188,7 +183,6 @@
     };
   }
 
-  /* ---------- AI efficiency panel ---------- */
   function openUsage() {
     var u = PO.ai.usageSummary();
     var byModel = u.today.byModel || {};
@@ -202,7 +196,7 @@
       '<div class="stat"><div class="v">' + u.weekMsgs + '</div><div class="l">msgs this week</div></div>' +
       '<div class="stat"><div class="v">' + (u.avgMs ? (u.avgMs / 1000).toFixed(1) + 's' : '—') + '</div><div class="l">avg reply time</div></div></div>' +
       '<h3>Today by model</h3><table class="tbl"><tr><th>Model</th><th>Msgs</th><th>~Tokens</th></tr>' + rows + '</table>' +
-      '<p class="tiny muted">Counted in this browser only — providers never see these totals. Free-tier limits live in ⚙ AI settings per model.</p>',
+      '<p class="tiny muted">Counted in this browser only — providers never see these totals.</p>',
       [{ label: 'Close', primary: true }]);
   }
 
@@ -216,17 +210,12 @@
         if (m) { m.patch = null; drawMessages(host, ui); }
       };
     });
-    // node links inside bubbles navigate via hash router
-    host.querySelectorAll('.msg-ai a[href^="#/node/"]').forEach(function (a) {
-      a.addEventListener('click', function () { /* default hash nav triggers routeFromHash */ });
-    });
   }
 
-  /* ---------- send / stream ---------- */
   function historyMessages() {
     var c = cfg();
     var limit = PO.ai.contextLimit(c);
-    var budget = Math.floor(limit * 0.45); // cap history at ~45% of the window
+    var budget = Math.floor(limit * 0.45);
     var budgetChars = budget * 4;
     var msgs = [{ role: 'system', content: PO.ai.systemPrompt(W(), { nodeId: PO.ui.state.nodeId }) }];
     var hist = [];
@@ -237,7 +226,6 @@
       if (m.changes) content += '\n[The user applied this patch: ' + m.changes + '.]';
       hist.push({ role: m.role, content: content });
     });
-    // newest-first trim so recent context always survives
     var used = 0, start = hist.length;
     for (var i = hist.length - 1; i >= 0; i--) {
       used += hist[i].content.length;
@@ -311,7 +299,6 @@
     }
   }
 
-  /* ---------- patch apply ---------- */
   function applyMsg(i, ui) {
     var m = S.msgs[i];
     if (!m || !m.patch || S.busy) return;
@@ -325,7 +312,6 @@
     ui.toast('Applied: ' + m.changes + (r.skipped.length ? ' · ' + r.skipped.length + ' op(s) skipped' : ''), 'ok');
   }
 
-  /* ---------- settings modal ---------- */
   function openSettings() {
     var c = cfg();
     var P = PO.ai.presets();
@@ -333,24 +319,23 @@
       return '<option value="' + k + '"' + (c.provider === k ? ' selected' : '') + '>' + U.esc(P[k].label) + '</option>';
     }).join('');
     var models = (P[c.provider] || {}).models || [];
-    PO.ui.modal('<h2>⚙ AI settings — bring your own key</h2>',
-      '<p class="small muted">Your key is stored in this browser (localStorage) and sent only to the provider you pick. ' +
-      'OpenAI-compatible endpoints all work, so every user can bring their own provider — including fully local ones.</p>' +
+    PO.ui.modal('<h2>⚙ AI Configuration Settings</h2>',
+      '<p class="small muted">Your API key is stored only in this browser (localStorage) and sent only to the provider you choose. ' +
+      'Any OpenAI-compatible endpoint works — including fully local models.</p>' +
       '<div class="row"><div style="flex:1;min-width:160px"><label class="small muted">Provider</label>' +
       '<select id="aiProv">' + provOpts + '</select></div>' +
       '<div style="flex:2;min-width:220px"><label class="small muted">Model</label>' +
       '<input type="text" id="aiModel" list="aiModelList" value="' + U.esc(c.model) + '" placeholder="gpt-4o-mini">' +
       '<datalist id="aiModelList">' + models.map(function (m) { return '<option value="' + U.esc(m) + '">'; }).join('') + '</datalist></div></div>' +
-      '<div class="row"><div style="flex:2;min-width:220px"><label class="small muted">API base URL</label>' +
+      '<div class="row"><div style="flex:2;min-width:220px"><label class="small muted">API Base URL</label>' +
       '<input type="text" id="aiBase" value="' + U.esc(c.baseUrl) + '"></div>' +
-      '<div style="flex:1;min-width:160px"><label class="small muted">API key</label>' +
+      '<div style="flex:1;min-width:160px"><label class="small muted">API Key</label>' +
       '<input type="password" id="aiKey" value="' + U.esc(c.apiKey) + '" placeholder="' + U.esc((P[c.provider] || {}).keyHint || 'key') + '" autocomplete="off"></div></div>' +
       '<label class="small muted">Extra system instructions (optional — tone, house rules)</label>' +
       '<textarea id="aiSys" style="min-height:60px" placeholder="e.g. Always answer tersely. Never invent requirements.">' + U.esc(c.systemExtra) + '</textarea>' +
       '<div class="row" style="margin-top:8px">' +
       '<button class="btn sm" id="aiTest">Test connection</button><span id="aiTestOut" class="small"></span></div>' +
-      '<h3>🆓 Free models & their limits</h3>' +
-      '<div id="aiQuota"></div>' +
+      '<div id="aiDetails" style="margin-top:12px"></div>' +
       '<p class="tiny muted" id="aiProvNote"></p>',
       [{ label: 'Cancel' }, {
         label: 'Save settings', primary: true, onClick: function () {
@@ -371,25 +356,14 @@
     function note() {
       var p = P[U.$('aiProv').value] || {};
       U.$('aiProvNote').innerHTML = (p.note || '') + (p.docs ? ' · <a href="' + p.docs + '" target="_blank" rel="noopener">get a key ↗</a>' : '');
-    }
-    function quotaTable(prov) {
-      var FM = PO.ai.freeModels();
-      var models = (P[prov] || {}).models || [];
-      var local = PO.ai.isLocal(prov);
-      if (local) {
-        U.$('aiQuota').innerHTML = '<div class="quota-card ok-state"><strong>🖥 Local model — no cloud, no quota</strong>' +
-          '<p class="small">Runs on your machine with the limits of your own hardware. Nothing is sent anywhere. ' +
-          'Free providers in the cloud are rate-limited instead: check the table below after switching provider.</p></div>';
-        return;
-      }
-      var rows = models.map(function (m) {
-        var info = FM[m];
-        var ctx = info && info.ctx ? info.ctx.toLocaleString() : '—';
-        var q = info ? info.quota : 'Paid or unpublished limits — check the provider docs.';
-        var badge = (String(m).indexOf(':free') >= 0 || /Free/i.test(m)) ? ' <span class="pill ok-t">free</span>' : '';
-        return '<tr><td class="mono tiny">' + U.esc(m) + badge + '</td><td class="mono">' + ctx + '</td><td class="small">' + q + '</td></tr>';
-      }).join('');
-      U.$('aiQuota').innerHTML = '<table class="tbl"><tr><th>Model</th><th>Context window</th><th>Free-tier limits</th></tr>' + rows + '</table>';
+      var det = U.$('aiDetails');
+      var curModel = U.$('aiModel').value.trim();
+      var info = PO.ai.modelInfo(curModel);
+      det.innerHTML = '<div class="card" style="margin:0"><h3 style="margin:0 0 6px">Model Details</h3>' +
+        '<div class="small"><strong>Model:</strong> ' + U.esc(curModel || '—') + '<br>' +
+        '<strong>Context Window:</strong> ' + (info && info.ctx ? info.ctx.toLocaleString() + ' tokens' : '—') + '<br>' +
+        '<strong>Provider:</strong> ' + U.esc(p.label || '') + '</div>' +
+        '<p class="tiny muted" style="margin:6px 0 0">Context window determines how much text the model can see at once. Larger windows handle bigger workspaces but may be slower.</p></div>';
     }
     function syncProv() {
       var k = U.$('aiProv').value;
@@ -397,10 +371,11 @@
       U.$('aiModel').value = P[k].models[0] || '';
       U.$('aiModelList').innerHTML = (P[k].models || []).map(function (m) { return '<option value="' + U.esc(m) + '">'; }).join('');
       U.$('aiKey').placeholder = P[k].keyHint || 'key';
-      note(); quotaTable(k);
+      note();
     }
     U.$('aiProv').onchange = syncProv;
-    note(); quotaTable(c.provider);
+    U.$('aiModel').addEventListener('input', note);
+    note();
     U.$('aiTest').onclick = function () {
       var out = U.$('aiTestOut');
       out.textContent = 'Testing…'; out.className = 'small muted';
@@ -420,8 +395,6 @@
     };
   }
 
-  /* ---------- floating launcher (topbar button) ---------- */
-  // Chat is a first-class side tab now, so the topbar button just opens it.
   function wireLauncher() {
     var btn = document.getElementById('btnChat');
     if (!btn) return;

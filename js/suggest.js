@@ -27,7 +27,7 @@
     ['Keep scripts testable', '💻 Scripts extracts code fences automatically. Use ✎ Edit to refine, and links show which feature each script implements.'],
     ['Link requirements', '🔗 Traceability shows which requirements have no implementing feature — coverage gaps are where specs go to die.'],
     ['Watch the AI meter', 'AI Chat shows a context-window meter before you send. Trim history or start fresh when the bar creeps up.'],
-    ['Free AI models', 'The ⚙ AI settings panel lists each free model\'s context window and quota (Groq, Gemini, OpenRouter :free, Cerebras) — plus fully local Ollama/LM Studio.'],
+    ['Configure AI providers', 'The ⚙ AI settings panel lets you connect any OpenAI-compatible provider — OpenAI, Groq, Gemini, OpenRouter, Mistral, plus fully local Ollama/LM Studio. Your key stays in your browser.'],
     ['Check the Issues tab', 'Every error the app hits lands in ⚠ Issues with a copy button — plus automatic workspace health checks.'],
     ['Snapshots are safety nets', '⤓ Offline snapshot bundles everything into one HTML file that works from a USB stick — no network, no AI.'],
     ['Version everything', 'Every edit — human or AI — writes a version entry with before/after diffs in 🕘 History.'],
